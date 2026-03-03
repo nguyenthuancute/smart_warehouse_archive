@@ -4,6 +4,7 @@ const http = require('http');
 const { Server } = require("socket.io");
 const mqtt = require('mqtt');
 const bodyParser = require('body-parser');
+const { createClient } = require('@supabase/supabase-js');
 
 // --- CẤU HÌNH ---
 const app = express();
@@ -14,11 +15,46 @@ app.use(express.static('public'));
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// --- SUPABASE CLIENT ---
+const supabase = createClient(
+    process.env.VITE_SUPABASE_URL,
+    process.env.VITE_SUPABASE_ANON_KEY
+);
+
+// --- KALMAN FILTER CLASS ---
+class KalmanFilter {
+    constructor() {
+        this.Q = 0.01;
+        this.R = 0.5;
+        this.P = { x: 1, y: 1, z: 1 };
+        this.X = { x: 0, y: 0, z: 0 };
+        this.K = { x: 0, y: 0, z: 0 };
+        this.initialized = false;
+    }
+
+    filter(measurement) {
+        if (!this.initialized) {
+            this.X = { ...measurement };
+            this.initialized = true;
+            return this.X;
+        }
+
+        ['x', 'y', 'z'].forEach(axis => {
+            const P_pred = this.P[axis] + this.Q;
+            this.K[axis] = P_pred / (P_pred + this.R);
+            this.X[axis] = this.X[axis] + this.K[axis] * (measurement[axis] - this.X[axis]);
+            this.P[axis] = (1 - this.K[axis]) * P_pred;
+        });
+
+        return { ...this.X };
+    }
+}
+
 // --- DỮ LIỆU BỘ NHỚ (RAM) ---
-// Anchor bây giờ có dạng: { id: 1, x: 0, y: 0, z: 2.5 }
-let anchors = []; 
+let anchors = [];
 let tagPositions = {};
-// Kích thước phòng (Mặc định)
+let kalmanFilters = {};
+let tagHistory = {};
 let roomConfig = { width: 10, length: 20, height: 4 };
 
 // --- SOCKET.IO ---
@@ -62,33 +98,50 @@ client.on('connect', () => {
     client.subscribe('kho_thong_minh/tags/+');
 });
 
-client.on('message', (topic, message) => {
+client.on('message', async (topic, message) => {
     try {
         const tagId = topic.split('/').pop();
         const data = JSON.parse(message.toString());
-        const dists = data.distances; // { "0": 5.2, "1": 3.1, "2": 4.5, "3": 2.1 }
+        const dists = data.distances;
 
-        // Yêu cầu tối thiểu 4 Anchor để định vị 3D chính xác
         if (anchors.length < 4) return;
 
-        // Map dữ liệu khoảng cách vào Anchor tọa độ
-        // Giả sử distance "0" ứng với anchors[0], "1" ứng với anchors[1]...
-        // Cần đảm bảo anchors đã được sort đúng thứ tự ID
-        
-        let p1 = anchors[0], r1 = dists["0"];
-        let p2 = anchors[1], r2 = dists["1"];
-        let p3 = anchors[2], r3 = dists["2"];
-        let p4 = anchors[3], r4 = dists["3"];
+        const distArray = Object.keys(dists).map(idx => ({
+            anchor: anchors[parseInt(idx)],
+            distance: dists[idx]
+        })).filter(d => d.anchor);
 
-        if (r1 && r2 && r3 && r4) {
-            // Tính toán 3D
-            const pos = trilaterate3D(p1, p2, p3, p4, r1, r2, r3, r4);
-            
-            if (pos) {
-                tagPositions[tagId] = pos;
-                io.emit('tags_update', tagPositions);
-                // console.log(`📍 ${tagId}: [${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)}]`);
+        if (distArray.length < 4) return;
+
+        const rawPos = trilaterateMultiPoint(distArray);
+
+        if (rawPos && isValidPosition(rawPos)) {
+            if (!kalmanFilters[tagId]) {
+                kalmanFilters[tagId] = new KalmanFilter();
             }
+
+            const smoothedPos = kalmanFilters[tagId].filter(rawPos);
+
+            if (!tagHistory[tagId]) {
+                tagHistory[tagId] = [];
+            }
+            tagHistory[tagId].push({ ...smoothedPos, timestamp: Date.now() });
+            if (tagHistory[tagId].length > 10) {
+                tagHistory[tagId].shift();
+            }
+
+            const accuracy = calculateAccuracy(distArray, smoothedPos);
+            tagPositions[tagId] = { ...smoothedPos, accuracy };
+
+            io.emit('tags_update', tagPositions);
+
+            supabase.from('tag_positions').insert({
+                tag_id: tagId,
+                x: smoothedPos.x,
+                y: smoothedPos.y,
+                z: smoothedPos.z,
+                accuracy: accuracy
+            }).then(() => {}).catch(() => {});
         }
     } catch (e) { console.error(e); }
 });
@@ -159,10 +212,67 @@ function cross(a, b) {
         z: a.x * b.y - a.y * b.x
     };
 }
-function tempVec(p2, p1) { // (p2-p1) / norm
+function tempVec(p2, p1) {
     const v = sub(p2, p1);
     return div(v, norm(v));
 }
 
+function trilaterateMultiPoint(distArray) {
+    if (distArray.length < 4) return null;
+
+    distArray.sort((a, b) => a.distance - b.distance);
+
+    const p1 = distArray[0].anchor, r1 = distArray[0].distance;
+    const p2 = distArray[1].anchor, r2 = distArray[1].distance;
+    const p3 = distArray[2].anchor, r3 = distArray[2].distance;
+    const p4 = distArray[3].anchor, r4 = distArray[3].distance;
+
+    const pos = trilaterate3D(p1, p2, p3, p4, r1, r2, r3, r4);
+
+    if (pos && distArray.length > 4) {
+        let totalWeight = 0;
+        let weightedPos = { x: 0, y: 0, z: 0 };
+
+        distArray.slice(0, 6).forEach(({ anchor, distance }) => {
+            const weight = 1 / (distance + 0.1);
+            weightedPos.x += anchor.x * weight;
+            weightedPos.y += anchor.y * weight;
+            weightedPos.z += anchor.z * weight;
+            totalWeight += weight;
+        });
+
+        if (totalWeight > 0) {
+            weightedPos.x /= totalWeight;
+            weightedPos.y /= totalWeight;
+            weightedPos.z /= totalWeight;
+
+            return {
+                x: pos.x * 0.7 + weightedPos.x * 0.3,
+                y: pos.y * 0.7 + weightedPos.y * 0.3,
+                z: pos.z * 0.7 + weightedPos.z * 0.3
+            };
+        }
+    }
+
+    return pos;
+}
+
+function isValidPosition(pos) {
+    if (!pos || isNaN(pos.x) || isNaN(pos.y) || isNaN(pos.z)) return false;
+    if (pos.x < -1 || pos.x > roomConfig.length + 1) return false;
+    if (pos.y < -1 || pos.y > roomConfig.width + 1) return false;
+    if (pos.z < 0 || pos.z > roomConfig.height + 2) return false;
+    return true;
+}
+
+function calculateAccuracy(distArray, pos) {
+    let totalError = 0;
+    distArray.forEach(({ anchor, distance }) => {
+        const calculatedDist = norm(sub(pos, anchor));
+        totalError += Math.abs(calculatedDist - distance);
+    });
+    return totalError / distArray.length;
+}
+
 const PORT = 3000;
-server.listen(PORT, () => console.log(`🚀 3D Server running on port ${PORT}`));
+server.listen(PORT, () => console.log(`3D Server running on port ${PORT}`));

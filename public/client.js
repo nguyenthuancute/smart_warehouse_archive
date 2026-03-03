@@ -36,15 +36,14 @@ scene.add(anchorGroup);
 const tagGroup = new THREE.Group();
 scene.add(tagGroup);
 
-// --- SETUP 2D CANVAS ---
 const canvas2d = document.getElementById('main-2d-canvas');
 const ctx2d = canvas2d.getContext('2d');
 
-// --- VARIABLES ---
 let roomMesh = null;
 let anchorsData = [];
-let tagMeshes = {}; // Dành cho 3D
-let tagDataStore = {}; // Lưu tọa độ tags để vẽ 2D
+let tagMeshes = {};
+let tagDataStore = {};
+let tagInterpolation = {};
 let roomConfig = { length: 10, width: 8, height: 4 };
 
 // --- HÀM LOGIC 3D ---
@@ -72,15 +71,28 @@ function updateAnchors3D(anchors) {
 
 function updateTags3D(tags) {
     Object.keys(tags).forEach(id => {
-        const pos = tags[id];
+        const targetPos = tags[id];
         if (!tagMeshes[id]) {
             const geo = new THREE.SphereGeometry(0.2, 32, 32);
             const mat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
             const mesh = new THREE.Mesh(geo, mat);
             scene.add(mesh);
             tagMeshes[id] = mesh;
+            tagInterpolation[id] = {
+                current: { x: targetPos.x, y: targetPos.y, z: targetPos.z },
+                target: { x: targetPos.x, y: targetPos.y, z: targetPos.z },
+                alpha: 0.15
+            };
         }
-        tagMeshes[id].position.set(pos.x, pos.z, pos.y);
+
+        tagInterpolation[id].target = { x: targetPos.x, y: targetPos.y, z: targetPos.z };
+
+        const interp = tagInterpolation[id];
+        interp.current.x += (interp.target.x - interp.current.x) * interp.alpha;
+        interp.current.y += (interp.target.y - interp.current.y) * interp.alpha;
+        interp.current.z += (interp.target.z - interp.current.z) * interp.alpha;
+
+        tagMeshes[id].position.set(interp.current.x, interp.current.z, interp.current.y);
     });
 }
 
@@ -176,23 +188,41 @@ function drawMain2DMap() {
         }
     });
 
-    // Vẽ Tag (Đỏ)
     ctx2d.fillStyle = '#ff0000';
     Object.keys(tagDataStore).forEach(id => {
         const pos = tagDataStore[id];
-        const px = offsetX + pos.x * currentScale;
-        const py = offsetY + pos.z * currentScale;
+
+        if (!tagInterpolation[id]) {
+            tagInterpolation[id] = {
+                current: { x: pos.x, y: pos.y, z: pos.z },
+                target: { x: pos.x, y: pos.y, z: pos.z },
+                alpha: 0.15
+            };
+        }
+
+        tagInterpolation[id].target = { x: pos.x, y: pos.y, z: pos.z };
+        const interp = tagInterpolation[id];
+        interp.current.x += (interp.target.x - interp.current.x) * interp.alpha;
+        interp.current.y += (interp.target.y - interp.current.y) * interp.alpha;
+        interp.current.z += (interp.target.z - interp.current.z) * interp.alpha;
+
+        const px = offsetX + interp.current.x * currentScale;
+        const py = offsetY + interp.current.z * currentScale;
 
         ctx2d.beginPath();
         const radius = Math.max(5, 8 * zoomLevel);
         ctx2d.arc(px, py, radius, 0, Math.PI * 2);
         ctx2d.fill();
 
-        // Label Tag
         if (zoomLevel > 0.5) {
             ctx2d.fillStyle = '#000';
             ctx2d.font = `bold ${12 * zoomLevel}px Arial`;
             ctx2d.fillText(id, px + radius + 2, py);
+
+            if (pos.accuracy !== undefined) {
+                ctx2d.font = `${10 * zoomLevel}px Arial`;
+                ctx2d.fillText(`±${pos.accuracy.toFixed(2)}m`, px + radius + 2, py + 15);
+            }
             ctx2d.fillStyle = '#ff0000';
         }
     });
@@ -279,18 +309,21 @@ document.getElementById('btn-2d-reset').addEventListener('click', () => {
 function updateTable(tags) {
     const tbody = document.getElementById('tag-table-body');
     if (Object.keys(tags).length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="color:#999;">Chờ dữ liệu...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="color:#999;">Chờ dữ liệu...</td></tr>';
         return;
     }
     tbody.innerHTML = '';
     Object.keys(tags).forEach(id => {
         const pos = tags[id];
-        // Hiển thị tọa độ theo logic người dùng: X, Y, Z (Cao)
+        const accuracyColor = pos.accuracy < 0.5 ? '#28a745' : pos.accuracy < 1.0 ? '#ffc107' : '#dc3545';
         const row = `<tr>
             <td><b>${id}</b></td>
             <td>${pos.x.toFixed(2)}</td>
             <td>${pos.z.toFixed(2)}</td>
             <td>${pos.y.toFixed(2)}</td>
+            <td style="color:${accuracyColor};font-weight:bold;">
+                ${pos.accuracy !== undefined ? '±' + pos.accuracy.toFixed(2) + 'm' : 'N/A'}
+            </td>
         </tr>`;
         tbody.innerHTML += row;
     });
