@@ -64,7 +64,7 @@ function updateAnchors3D(anchors) {
         const geo = new THREE.SphereGeometry(0.15, 16, 16);
         const mat = new THREE.MeshStandardMaterial({ color: 0x007bff });
         const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.set(anc.x, anc.z, anc.y); 
+        mesh.position.set(anc.x, anc.y, anc.z); 
         anchorGroup.add(mesh);
     });
 }
@@ -76,25 +76,27 @@ function updateTags3D(tags) {
             const geo = new THREE.SphereGeometry(0.2, 32, 32);
             const mat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
             const mesh = new THREE.Mesh(geo, mat);
-            scene.add(mesh);
+            tagGroup.add(mesh); // Add to tag group
             tagMeshes[id] = mesh;
             tagInterpolation[id] = {
-                current: { x: targetPos.x, y: targetPos.y, z: targetPos.z },
-                target: { x: targetPos.x, y: targetPos.y, z: targetPos.z },
-                alpha: 0.15
+                current: new THREE.Vector3(targetPos.x, targetPos.y, targetPos.z),
+                target: new THREE.Vector3(targetPos.x, targetPos.y, targetPos.z),
             };
         }
-
-        tagInterpolation[id].target = { x: targetPos.x, y: targetPos.y, z: targetPos.z };
-
-        const interp = tagInterpolation[id];
-        interp.current.x += (interp.target.x - interp.current.x) * interp.alpha;
-        interp.current.y += (interp.target.y - interp.current.y) * interp.alpha;
-        interp.current.z += (interp.target.z - interp.current.z) * interp.alpha;
-
-        tagMeshes[id].position.set(interp.current.x, interp.current.z, interp.current.y);
+        tagInterpolation[id].target.set(targetPos.x, targetPos.y, targetPos.z);
     });
 }
+
+function interpolateTagPositions() {
+    Object.keys(tagInterpolation).forEach(id => {
+        const interp = tagInterpolation[id];
+        interp.current.lerp(interp.target, 0.1);
+        if (tagMeshes[id]) {
+            tagMeshes[id].position.copy(interp.current);
+        }
+    });
+}
+
 
 // --- HÀM LOGIC 2D (MỚI) ---
 
@@ -191,20 +193,9 @@ function drawMain2DMap() {
     ctx2d.fillStyle = '#ff0000';
     Object.keys(tagDataStore).forEach(id => {
         const pos = tagDataStore[id];
-
-        if (!tagInterpolation[id]) {
-            tagInterpolation[id] = {
-                current: { x: pos.x, y: pos.y, z: pos.z },
-                target: { x: pos.x, y: pos.y, z: pos.z },
-                alpha: 0.15
-            };
-        }
-
-        tagInterpolation[id].target = { x: pos.x, y: pos.y, z: pos.z };
         const interp = tagInterpolation[id];
-        interp.current.x += (interp.target.x - interp.current.x) * interp.alpha;
-        interp.current.y += (interp.target.y - interp.current.y) * interp.alpha;
-        interp.current.z += (interp.target.z - interp.current.z) * interp.alpha;
+
+        if (!interp) return;
 
         const px = offsetX + interp.current.x * currentScale;
         const py = offsetY + interp.current.z * currentScale;
@@ -319,8 +310,8 @@ function updateTable(tags) {
         const row = `<tr>
             <td><b>${id}</b></td>
             <td>${pos.x.toFixed(2)}</td>
-            <td>${pos.z.toFixed(2)}</td>
             <td>${pos.y.toFixed(2)}</td>
+            <td>${pos.z.toFixed(2)}</td>
             <td style="color:${accuracyColor};font-weight:bold;">
                 ${pos.accuracy !== undefined ? '±' + pos.accuracy.toFixed(2) + 'm' : 'N/A'}
             </td>
@@ -328,6 +319,58 @@ function updateTable(tags) {
         tbody.innerHTML += row;
     });
 }
+
+// --- ANCHOR MANAGEMENT UI ---
+const anchorList = document.getElementById('anchor-list');
+
+function renderAnchorList() {
+    anchorList.innerHTML = '';
+    if (anchorsData.length === 0) {
+        anchorList.innerHTML = '<p style="font-size:12px; color:#888;">Chưa có anchor nào. Hãy thêm một anchor.</p>';
+    }
+    anchorsData.forEach((anchor, index) => {
+        const item = document.createElement('div');
+        item.className = 'anchor-item';
+        item.innerHTML = `
+            <span class="anchor-id">A${index}</span>
+            <input type="number" class="anchor-x" value="${anchor.x}" placeholder="x" data-index="${index}">
+            <input type="number" class="anchor-y" value="${anchor.y}" placeholder="y" data-index="${index}">
+            <input type="number" class="anchor-z" value="${anchor.z}" placeholder="z" data-index="${index}">
+            <button class="btn-danger btn-remove-anchor" data-index="${index}">X</button>
+        `;
+        anchorList.appendChild(item);
+    });
+    
+    // Add event listeners for remove buttons
+    document.querySelectorAll('.btn-remove-anchor').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const index = parseInt(e.target.dataset.index);
+            anchorsData.splice(index, 1);
+            renderAnchorList(); // Re-render the list
+        });
+    });
+}
+
+
+document.getElementById('btn-add-anchor').addEventListener('click', () => {
+    anchorsData.push({ id: anchorsData.length, x: 0, y: 0, z: 0 });
+    renderAnchorList();
+});
+
+document.getElementById('btn-save-anchors').addEventListener('click', () => {
+    const newAnchors = [];
+    document.querySelectorAll('#anchor-list .anchor-item').forEach((item, index) => {
+        const x = parseFloat(item.querySelector('.anchor-x').value);
+        const y = parseFloat(item.querySelector('.anchor-y').value);
+        const z = parseFloat(item.querySelector('.anchor-z').value);
+        if (!isNaN(x) && !isNaN(y) && !isNaN(z)) {
+            newAnchors.push({ id: index, x, y, z });
+        }
+    });
+    anchorsData = newAnchors;
+    socket.emit('set_anchors', anchorsData);
+    alert('Đã lưu lại vị trí các anchor!');
+});
 
 
 // --- SỰ KIỆN NÚT BẤM ---
@@ -338,25 +381,6 @@ document.getElementById('btn-update-room').addEventListener('click', () => {
     createRoom3D(l, w, h);
     socket.emit('update_room_config', { length: l, width: w, height: h });
     drawMain2DMap(); // Vẽ lại 2D nếu đang mở
-});
-
-document.getElementById('btn-add-anchor').addEventListener('click', () => {
-    const x = parseFloat(document.getElementById('ax').value);
-    const y = parseFloat(document.getElementById('ay').value);
-    const z = parseFloat(document.getElementById('az').value);
-    if (isNaN(x) || isNaN(y) || isNaN(z)) return alert("Nhập số hợp lệ!");
-    anchorsData.push({ id: anchorsData.length, x, y, z });
-    socket.emit('set_anchors', anchorsData);
-    document.getElementById('ax').value = '';
-    document.getElementById('ay').value = '';
-    document.getElementById('az').value = '';
-});
-
-document.getElementById('btn-clear-anchors').addEventListener('click', () => {
-    if (confirm("Xóa toàn bộ Anchor?")) {
-        anchorsData = [];
-        socket.emit('set_anchors', []);
-    }
 });
 
 document.getElementById('btn-reset-cam').addEventListener('click', () => {
@@ -383,7 +407,7 @@ socket.on('room_config_update', (cfg) => {
 socket.on('anchors_updated', (data) => {
     anchorsData = data;
     updateAnchors3D(data);
-    document.getElementById('anchor-count').innerText = `Anchor: ${data.length}`;
+    renderAnchorList();
     drawMain2DMap();
 });
 
@@ -401,8 +425,13 @@ socket.on('tags_update', (data) => {
 // --- ANIMATION LOOP ---
 function animate() {
     requestAnimationFrame(animate);
+    interpolateTagPositions(); // Interpolate tag positions for smooth movement
     controls.update();
     renderer.render(scene, camera);
+    // Also redraw 2D map if visible
+    if (canvas2d.offsetParent !== null) {
+        drawMain2DMap();
+    }
 }
 animate();
 
