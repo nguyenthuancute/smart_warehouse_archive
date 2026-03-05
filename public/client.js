@@ -77,7 +77,7 @@ function updateAnchors3D(anchors) {
         const geo = new THREE.SphereGeometry(0.15, 16, 16);
         const mat = new THREE.MeshStandardMaterial({ color: 0x00aaff }); 
         const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.set(anc.x, anc.y, anc.z); 
+        mesh.position.set(anc.x, anc.z, anc.y); 
         anchorGroup.add(mesh);
     });
 }
@@ -88,7 +88,7 @@ function updateObjects3D() {
         const geometry = new THREE.BoxGeometry(obj.l, obj.h, obj.w);
         const material = new THREE.MeshStandardMaterial({ color: 0xaaaaaa });
         const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.set(obj.x, obj.y, obj.z);
+        mesh.position.set(obj.x, obj.z, obj.y);
         objectGroup.add(mesh);
     });
 }
@@ -103,11 +103,11 @@ function updateTags3D(tags) {
             tagGroup.add(mesh);
             tagMeshes[id] = mesh;
             tagInterpolation[id] = {
-                current: new THREE.Vector3(targetPos.x, targetPos.y, targetPos.z),
-                target: new THREE.Vector3(targetPos.x, targetPos.y, targetPos.z),
+                current: new THREE.Vector3(targetPos.x, targetPos.z, targetPos.y),
+                target: new THREE.Vector3(targetPos.x, targetPos.z, targetPos.y),
             };
         }
-        tagInterpolation[id].target.set(targetPos.x, targetPos.y, targetPos.z);
+        tagInterpolation[id].target.set(targetPos.x, targetPos.z, targetPos.y);
     });
 }
 
