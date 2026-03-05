@@ -1,0 +1,18 @@
+{
+  "users": {
+    "1": {
+      "password": "$2b$10$c4srO1Uz.7h5cUO.7wnkYu.87Ggji9Dh2xXB5MsQk/o8ZVfTT1eE."
+    }
+  },
+  "warehouseData": {
+    "1": {
+      "roomConfig": {
+        "length": 10,
+        "width": 8,
+        "height": 4
+      },
+      "anchors": [],
+      "objects": []
+    }
+  }
+}

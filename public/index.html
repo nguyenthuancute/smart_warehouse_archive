@@ -8,10 +8,10 @@
         body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         #controls {
             position: absolute; top: 10px; left: 10px;
-            background: transparent;
             width: 350px; z-index: 100;
-            max-height: calc(100vh - 20px); overflow-y: auto;
-            display: flex; flex-direction: column; gap: 10px;
+            max-height: calc(100vh - 20px); 
+            overflow-y: scroll; /* Always show scrollbar */
+            padding-right: 15px; /* Add space for scrollbar */
         }
         .acc-item {
             background: rgba(255, 255, 255, 0.98);
@@ -19,6 +19,7 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             overflow: hidden;
             transition: all 0.3s ease;
+            margin-bottom: 10px;
         }
         .acc-header {
             padding: 12px 15px; background: #f8f9fa; cursor: pointer;
@@ -63,13 +64,20 @@
         #map-2d-container { background: #f0f0f0; display: none; justify-content: center; align-items: center; }
         #main-2d-canvas { background: white; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
         
-        /* Anchor Editor Styles */
-        #anchor-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
-        .anchor-item { display: flex; align-items: center; gap: 5px; }
-        .anchor-id { font-weight: bold; width: 30px; text-align: center; }
-        .anchor-item input { text-align: center; }
-        .btn-remove-anchor { width: 40px !important; padding: 5px !important; margin: 0 !important; font-size: 16px; background: #ffc107; color: #333; }
+        #axis-container {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 100px;
+            height: 100px;
+            z-index: 101;
+        }
 
+        /* Anchor & Object Editor Styles */
+        .anchor-item, .object-item { display: flex; align-items: center; gap: 5px; margin-bottom: 8px; font-size: 13px; }
+        .anchor-id, .object-id { font-weight: bold; width: 30px; text-align: center; }
+        .anchor-item input, .object-item-details input { text-align: center; }
+        .btn-remove-anchor, .btn-remove-object { width: 40px !important; padding: 5px !important; margin: 0 !important; font-size: 16px; background: #ffc107; color: #333; }
         .anchor-buttons { display: flex; gap: 10px; margin-top: 10px; }
     </style>
     <script type="importmap">
@@ -86,17 +94,11 @@
                     <button class="btn-outline active" id="btn-mode-3d" onclick="switchMode('3d')">3D View</button>
                     <button class="btn-outline" id="btn-mode-2d" onclick="switchMode('2d')">2D Map</button>
                 </div>
-                <div id="cam-controls-3d" style="margin-top: 10px;">
-                    <div style="display: flex; gap: 5px;">
-                        <button class="btn-primary" id="btn-reset-cam">Reset Cam</button>
-                        <button class="btn-primary" id="btn-top-view">Top View</button>
-                    </div>
-                </div>
             </div>
         </div>
 
         <div class="acc-item active" id="item2"> 
-            <div class="acc-header" onclick="toggleAcc('item2')">2. Cấu hình Kho & Anchors</div>
+            <div class="acc-header" onclick="toggleAcc('item2')">2. Cấu hình Kho</div>
             <div class="acc-content">
                 <label>Kích thước kho (m):</label>
                 <div class="row-inputs">
@@ -112,9 +114,24 @@
                     <div id="anchor-list"></div>
                     <div class="anchor-buttons">
                         <button id="btn-add-anchor" class="btn-success">Thêm Anchor</button>
-                        <button id="btn-save-anchors" class="btn-primary">Lưu Thay Đổi</button>
+                        <button id="btn-save-anchors" class="btn-primary">Lưu Anchors</button>
                     </div>
                 </div>
+                <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
+
+                <label>Thêm Vật Thể (Chướng ngại vật):</label>
+                <div class="row-inputs">
+                    <input type="number" id="inp-obj-l" placeholder="Dài">
+                    <input type="number" id="inp-obj-w" placeholder="Rộng">
+                    <input type="number" id="inp-obj-h" placeholder="Cao">
+                </div>
+                 <div class="row-inputs">
+                    <input type="number" id="inp-obj-x" placeholder="Vị trí X">
+                    <input type="number" id="inp-obj-y" placeholder="Vị trí Y">
+                    <input type="number" id="inp-obj-z" placeholder="Vị trí Z">
+                </div>
+                <button class="btn-success" id="btn-add-object">Thêm Vật Thể</button>
+                <div id="object-list" style="margin-top: 15px;"></div>
             </div>
         </div>
 
@@ -132,6 +149,7 @@
     </div>
     
     <div id="scene-container"></div>
+    <div id="axis-container"></div>
     <div id="map-2d-container">
         <canvas id="main-2d-canvas"></canvas>
     </div>
@@ -146,9 +164,11 @@
         function switchMode(mode) {
             const cont3d = document.getElementById('scene-container');
             const cont2d = document.getElementById('map-2d-container');
+            const axisCont = document.getElementById('axis-container');
             document.getElementById('btn-mode-3d').classList.toggle('active', mode === '3d');
             document.getElementById('btn-mode-2d').classList.toggle('active', mode === '2d');
             cont3d.style.display = (mode === '3d') ? 'block' : 'none';
+            axisCont.style.display = (mode === '3d') ? 'block' : 'none';
             cont2d.style.display = (mode === '2d') ? 'flex' : 'none';
             if (mode === '2d') window.dispatchEvent(new Event('resize'));
         }
