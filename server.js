@@ -15,11 +15,11 @@ app.use(express.static('public'));
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// --- KALMAN FILTER CLASS ---
+// --- KALMAN FILTER CLASS (IMPROVED FOR PER-AXIS TUNING) ---
 class KalmanFilter {
-    constructor() {
-        this.Q = 0.005; // Process noise covariance
-        this.R = 0.8;   // Measurement noise covariance
+    constructor({ Q = {x: 0.005, y: 0.005, z: 0.005}, R = {x: 0.8, y: 0.8, z: 0.8} } = {}) {
+        this.Q = Q; // Process noise covariance
+        this.R = R;   // Measurement noise covariance
         this.P = { x: 1, y: 1, z: 1 }; // Estimation error covariance
         this.X = { x: 0, y: 0, z: 0 }; // State
         this.initialized = false;
@@ -33,10 +33,11 @@ class KalmanFilter {
         }
 
         ['x', 'y', 'z'].forEach(axis => {
+            if (measurement[axis] === undefined) return;
             // Prediction
-            const P_pred = this.P[axis] + this.Q;
+            const P_pred = this.P[axis] + this.Q[axis];
             // Kalman Gain
-            const K = P_pred / (P_pred + this.R);
+            const K = P_pred / (P_pred + this.R[axis]);
             // Update
             this.X[axis] = this.X[axis] + K * (measurement[axis] - this.X[axis]);
             this.P[axis] = (1 - K) * P_pred;
@@ -45,6 +46,7 @@ class KalmanFilter {
         return { ...this.X };
     }
 }
+
 
 // --- DỮ LIỆU BỘ NHỚ (RAM) ---
 let anchors = [];
@@ -109,7 +111,10 @@ client.on('message', async (topic, message) => {
 
         if (rawPos && isValidPosition(rawPos)) {
             if (!kalmanFilters[tagId]) {
-                kalmanFilters[tagId] = new KalmanFilter();
+                 kalmanFilters[tagId] = new KalmanFilter({
+                    Q: { x: 0.005, y: 0.005, z: 0.001 }, // Lower Q for Z-axis for smoother results
+                    R: { x: 0.8, y: 0.8, z: 1.2 }       // Higher R for Z-axis as we trust it less
+                });
             }
 
             const smoothedPos = kalmanFilters[tagId].filter(rawPos);
