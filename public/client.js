@@ -1,16 +1,17 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
 
 const socket = io();
 
 // --- SETUP THREE.JS (3D) ---
 const container = document.getElementById('scene-container');
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1a1a2e); 
+scene.background = new THREE.Color(0x1a1a2e);
 
 const camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
-camera.position.set(15, 20, 15); 
+camera.position.set(15, 20, 15);
 camera.lookAt(0, 0, 0);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -26,7 +27,7 @@ scene.add(dirLight);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
-const gridHelper = new THREE.GridHelper(1000, 100, 0x535353, 0x3a3a3a); 
+const gridHelper = new THREE.GridHelper(1000, 100, 0x535353, 0x3a3a3a);
 scene.add(gridHelper);
 
 const anchorGroup = new THREE.Group();
@@ -41,13 +42,12 @@ const axisContainer = document.getElementById('axis-container');
 const axisScene = new THREE.Scene();
 const axisCamera = new THREE.PerspectiveCamera(50, axisContainer.clientWidth / axisContainer.clientHeight, 0.1, 10);
 axisCamera.position.z = 2;
-const axisRenderer = new THREE.WebGLRenderer({alpha: true, antialias: true});
+const axisRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
 axisRenderer.setSize(axisContainer.clientWidth, axisContainer.clientHeight);
 axisContainer.appendChild(axisRenderer.domElement);
 
 const axisHelper = new THREE.AxesHelper(1);
 axisScene.add(axisHelper);
-
 
 const canvas2d = document.getElementById('main-2d-canvas');
 const ctx2d = canvas2d.getContext('2d');
@@ -59,6 +59,164 @@ let tagMeshes = {};
 let tagDataStore = {};
 let tagInterpolation = {};
 let roomConfig = { length: 10, width: 8, height: 4 };
+
+// --- OBJECT SELECTION & MANIPULATION ---
+let selectedObjects = [];
+let copiedObjectsData = [];
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const transformControls = new TransformControls(camera, renderer.domElement);
+transformControls.size = 0.6;
+scene.add(transformControls);
+
+function getObjectByMesh(mesh) {
+    const index = objectGroup.children.indexOf(mesh);
+    if (index !== -1) {
+        return { data: objectsData[index], index };
+    }
+    return null;
+}
+
+function selectObject(mesh, additive = false) {
+    if (!additive) {
+        deselectAllObjects();
+    }
+
+    const index = selectedObjects.findIndex(obj => obj.uuid === mesh.uuid);
+    if (index === -1) {
+        selectedObjects.push(mesh);
+        mesh.material.color.set(0xff0000); // Highlight
+    } else {
+        // If already selected in additive mode, deselect it
+        mesh.material.color.set(0xaaaaaa);
+        selectedObjects.splice(index, 1);
+    }
+
+    if (selectedObjects.length === 1) {
+        transformControls.attach(selectedObjects[0]);
+    } else {
+        transformControls.detach();
+    }
+}
+
+function deselectAllObjects() {
+    selectedObjects.forEach(obj => obj.material.color.set(0xaaaaaa));
+    selectedObjects = [];
+    transformControls.detach();
+}
+
+// --- Event Listeners for Controls and Selection ---
+
+// When dragging ends, update the data model
+transformControls.addEventListener('mouseUp', () => {
+    if (selectedObjects.length === 1) {
+        const selectedMesh = selectedObjects[0];
+        const objInfo = getObjectByMesh(selectedMesh);
+        if (objInfo) {
+            const { data } = objInfo;
+            const newPos = selectedMesh.position;
+            data.x = newPos.x;
+            data.y = newPos.z;
+            data.z = newPos.y;
+            renderObjectList(); // Update the UI panel
+        }
+    }
+});
+
+// Disable orbit controls while transforming
+transformControls.addEventListener('dragging-changed', (event) => {
+    controls.enabled = !event.value;
+});
+
+// Left-click to select
+container.addEventListener('click', (event) => {
+    if (transformControls.dragging) return;
+
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(objectGroup.children);
+
+    if (intersects.length > 0) {
+        const firstIntersected = intersects[0].object;
+        const isAdditive = event.shiftKey;
+        selectObject(firstIntersected, isAdditive);
+    } else {
+        deselectAllObjects();
+    }
+});
+
+// --- Context Menu Logic ---
+const contextMenu = document.getElementById('context-menu');
+
+container.addEventListener('contextmenu', (event) => {
+    event.preventDefault();
+
+    // Raycast to see if we're clicking on an object
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(objectGroup.children);
+
+    // If not clicking on any object, and no objects are selected, do nothing
+    if (intersects.length === 0 && selectedObjects.length === 0) {
+        contextMenu.style.display = 'none';
+        return;
+    }
+
+    // If clicking on an object that isn't currently selected, select it exclusively
+    if (intersects.length > 0) {
+        const clickedMesh = intersects[0].object;
+        if (!selectedObjects.includes(clickedMesh)) {
+            selectObject(clickedMesh, false);
+        }
+    }
+
+    // Show context menu
+    contextMenu.style.display = 'block';
+    contextMenu.style.left = `${event.clientX}px`;
+    contextMenu.style.top = `${event.clientY}px`;
+});
+
+// Hide context menu on left-click
+window.addEventListener('click', () => {
+    contextMenu.style.display = 'none';
+});
+
+document.getElementById('ctx-copy').addEventListener('click', () => {
+    if (selectedObjects.length > 0) {
+        copiedObjectsData = selectedObjects.map(mesh => {
+            const objInfo = getObjectByMesh(mesh);
+            return { ...objInfo.data };
+        });
+        console.log(`${copiedObjectsData.length} object(s) copied!`);
+    }
+    contextMenu.style.display = 'none';
+});
+
+document.getElementById('ctx-paste').addEventListener('click', () => {
+    if (copiedObjectsData.length > 0) {
+        copiedObjectsData.forEach(data => {
+            const newObject = { ...data };
+            newObject.x += 0.5; // Offset pasted object slightly
+            newObject.y += 0.5;
+            objectsData.push(newObject);
+        });
+        renderObjectList();
+        updateObjects3D();
+        console.log(`${copiedObjectsData.length} object(s) pasted!`);
+    }
+    contextMenu.style.display = 'none';
+});
+
+document.getElementById('ctx-group').addEventListener('click', () => {
+    // Grouping logic to be implemented
+    console.log('Grouping functionality to be added.');
+    contextMenu.style.display = 'none';
+});
 
 // --- 3D LOGIC ---
 function createRoom3D(length, width, height) {
@@ -75,7 +233,7 @@ function createRoom3D(length, width, height) {
     const edges = new THREE.EdgesGeometry(geometry);
     const lineMaterial = new THREE.LineBasicMaterial({ color: 0xe94560 });
     const wireframe = new THREE.LineSegments(edges, lineMaterial);
-    roomMesh.add(wireframe); 
+    roomMesh.add(wireframe);
 
     roomMesh.position.set(length / 2, height / 2, width / 2);
     scene.add(roomMesh);
@@ -83,24 +241,36 @@ function createRoom3D(length, width, height) {
 }
 
 function updateAnchors3D(anchors) {
-    while(anchorGroup.children.length > 0) anchorGroup.remove(anchorGroup.children[0]);
+    while (anchorGroup.children.length > 0) anchorGroup.remove(anchorGroup.children[0]);
     anchors.forEach(anc => {
         const geo = new THREE.SphereGeometry(0.15, 16, 16);
-        const mat = new THREE.MeshStandardMaterial({ color: 0x00aaff }); 
+        const mat = new THREE.MeshStandardMaterial({ color: 0x00aaff });
         const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.set(anc.x, anc.z, anc.y); 
+        mesh.position.set(anc.x, anc.z, anc.y);
         anchorGroup.add(mesh);
     });
 }
 
 function updateObjects3D() {
-    while(objectGroup.children.length > 0) objectGroup.remove(objectGroup.children[0]);
+    // Preserve selection
+    const previouslySelectedUUIDs = selectedObjects.map(m => m.uuid);
+    deselectAllObjects();
+
+    while (objectGroup.children.length > 0) objectGroup.remove(objectGroup.children[0]);
+
     objectsData.forEach(obj => {
         const geometry = new THREE.BoxGeometry(obj.l, obj.h, obj.w);
         const material = new THREE.MeshStandardMaterial({ color: 0xaaaaaa });
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.set(obj.x, obj.z, obj.y);
         objectGroup.add(mesh);
+    });
+
+    // Re-select objects
+    objectGroup.children.forEach(mesh => {
+        if (previouslySelectedUUIDs.includes(mesh.uuid)) {
+            selectObject(mesh, true);
+        }
     });
 }
 
@@ -109,7 +279,7 @@ function updateTags3D(tags) {
         const targetPos = tags[id];
         if (!tagMeshes[id]) {
             const geo = new THREE.SphereGeometry(0.2, 32, 32);
-            const mat = new THREE.MeshStandardMaterial({ color: 0xff4444 }); 
+            const mat = new THREE.MeshStandardMaterial({ color: 0xff4444 });
             const mesh = new THREE.Mesh(geo, mat);
             tagGroup.add(mesh);
             tagMeshes[id] = mesh;
@@ -125,7 +295,7 @@ function updateTags3D(tags) {
 function interpolateTagPositions() {
     Object.keys(tagInterpolation).forEach(id => {
         const interp = tagInterpolation[id];
-        if(interp) {
+        if (interp) {
             interp.current.lerp(interp.target, 0.2);
             if (tagMeshes[id]) {
                 tagMeshes[id].position.copy(interp.current);
@@ -217,7 +387,7 @@ function renderAnchorList() {
         `;
         anchorList.appendChild(item);
     });
-    
+
     document.querySelectorAll('.btn-remove-anchor').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const index = parseInt(e.target.dataset.index);
@@ -298,7 +468,7 @@ document.getElementById('btn-add-anchor').addEventListener('click', () => {
 });
 
 document.getElementById('btn-add-object').addEventListener('click', () => {
-    objectsData.push({l: 1, w: 1, h: 1, x: 0, y: 0, z: 0});
+    objectsData.push({ l: 1, w: 1, h: 1, x: 0, y: 0, z: 0 });
     renderObjectList();
     updateObjects3D();
     updateCollapsibleHeight(document.querySelector('#objects-section .collapsible-content'));
@@ -308,7 +478,7 @@ document.getElementById('inpL').addEventListener('change', updateRoom);
 document.getElementById('inpW').addEventListener('change', updateRoom);
 document.getElementById('inpH').addEventListener('change', updateRoom);
 
-function updateRoom(){
+function updateRoom() {
     const l = parseFloat(document.getElementById('inpL').value) || 10;
     const w = parseFloat(document.getElementById('inpW').value) || 8;
     const h = parseFloat(document.getElementById('inpH').value) || 4;
@@ -328,7 +498,7 @@ socket.on('room_config_update', (cfg) => {
 socket.on('anchors_updated', (data) => {
     anchorsData = data;
     updateAnchors3D(data);
-    renderAnchorList(); 
+    renderAnchorList();
 });
 
 socket.on('tags_update', (data) => {
@@ -355,7 +525,7 @@ window.addEventListener('resize', () => {
     camera.aspect = clientWidth / clientHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(clientWidth, clientHeight);
-    
+
     axisCamera.aspect = axisContainer.clientWidth / axisContainer.clientHeight;
     axisCamera.updateProjectionMatrix();
     axisRenderer.setSize(axisContainer.clientWidth, axisContainer.clientHeight);
@@ -366,6 +536,7 @@ createRoom3D(roomConfig.length, roomConfig.width, roomConfig.height);
 renderAnchorList();
 renderObjectList();
 window.dispatchEvent(new Event('resize'));
+
 
 // --- UI LOGIC (MOVED FROM INDEX.HTML) ---
 
@@ -389,7 +560,7 @@ btn2d.addEventListener('click', () => {
     axisContainer.style.display = 'none';
     btn2d.classList.add('active');
     btn3d.classList.remove('active');
-    window.dispatchEvent(new Event('resize')); 
+    window.dispatchEvent(new Event('resize'));
 });
 
 // Collapsible sections

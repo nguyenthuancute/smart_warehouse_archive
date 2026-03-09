@@ -314,3 +314,26 @@ input[type="number"] {
     position: sticky;
     top: 0;
 }
+
+/* Context Menu */
+.context-menu {
+    position: absolute;
+    display: none;
+    background-color: var(--bg-med);
+    border-radius: 5px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    z-index: 1000;
+    list-style: none;
+    padding: 5px 0;
+    margin: 0;
+    font-size: 0.9em;
+}
+
+.context-menu li {
+    padding: 8px 15px;
+    cursor: pointer;
+}
+
+.context-menu li:hover {
+    background-color: var(--bg-light);
+}
