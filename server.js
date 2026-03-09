@@ -18,10 +18,10 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // --- KALMAN FILTER CLASS ---
 class KalmanFilter {
     constructor({ Q = {x: 0.005, y: 0.005, z: 0.005}, R = {x: 0.8, y: 0.8, z: 0.8} } = {}) {
-        this.Q = Q; // Process noise covariance
-        this.R = R;   // Measurement noise covariance
-        this.P = { x: 1, y: 1, z: 1 }; // Estimation error covariance
-        this.X = { x: 0, y: 0, z: 0 }; // State
+        this.Q = Q;
+        this.R = R;
+        this.P = { x: 1, y: 1, z: 1 };
+        this.X = { x: 0, y: 0, z: 0 };
         this.initialized = false;
     }
 
@@ -33,7 +33,7 @@ class KalmanFilter {
         }
 
         ['x', 'y', 'z'].forEach(axis => {
-            if (measurement[axis] === undefined) return;
+            if (measurement[axis] === undefined || isNaN(measurement[axis])) return;
             const P_pred = this.P[axis] + this.Q[axis];
             const K = P_pred / (P_pred + this.R[axis]);
             this.X[axis] = this.X[axis] + K * (measurement[axis] - this.X[axis]);
@@ -44,8 +44,7 @@ class KalmanFilter {
     }
 }
 
-
-// --- DỮ LIỆU BỘ NHỚ (RAM) ---
+// --- DỮ LIỆU BỘ NHỚ ---
 let anchors = [];
 let tagPositions = {};
 let kalmanFilters = {};
@@ -54,7 +53,6 @@ let roomConfig = { length: 10, width: 8, height: 4 };
 // --- SOCKET.IO ---
 io.on('connection', (socket) => {
     console.log('🔌 Client connected');
-
     socket.emit('room_config_update', roomConfig);
     socket.emit('anchors_updated', anchors);
 
@@ -70,7 +68,7 @@ io.on('connection', (socket) => {
     });
 });
 
-// --- MQTT (NHẬN KHOẢNG CÁCH) ---
+// --- MQTT ---
 const MQTT_HOST = 'ac283ced08d54c199286b8bdb567f195.s1.eu.hivemq.cloud';
 const MQTT_PORT = 8883;
 const MQTT_USER = 'smart_warehouse';
@@ -95,28 +93,26 @@ client.on('message', async (topic, message) => {
         const data = JSON.parse(message.toString());
         const dists = data.distances;
 
-        if (anchors.length < 3) return;
+        if (anchors.length < 4) return; // Multilateration requires at least 4 anchors
 
         const distArray = Object.keys(dists).map(idx => ({
             anchor: anchors[parseInt(idx)],
             distance: dists[idx]
         })).filter(d => d.anchor && typeof d.distance === 'number' && d.distance > 0);
 
-        if (distArray.length < 3) return;
+        if (distArray.length < 4) return;
 
-        const rawPos = calculateTagPosition(distArray, roomConfig);
+        const rawPos = multilateration(distArray);
 
         if (rawPos && isValidPosition(rawPos)) {
             if (!kalmanFilters[tagId]) {
-                 kalmanFilters[tagId] = new KalmanFilter({
-                    Q: { x: 0.005, y: 0.005, z: 0.001 }, 
-                    R: { x: 0.8, y: 0.8, z: 1.2 }       
+                kalmanFilters[tagId] = new KalmanFilter({
+                    Q: { x: 0.005, y: 0.005, z: 0.002 },
+                    R: { x: 0.8, y: 0.8, z: 1.0 }
                 });
             }
-
             const smoothedPos = kalmanFilters[tagId].filter(rawPos);
             const accuracy = calculateAccuracy(distArray, smoothedPos);
-            
             tagPositions[tagId] = { ...smoothedPos, accuracy };
         }
     } catch (e) { console.error('MQTT Message Error:', e); }
@@ -130,75 +126,105 @@ setInterval(() => {
     }
 }, UPDATE_INTERVAL);
 
+// --- MATRIX HELPER FUNCTIONS ---
+function mat_transpose(matrix) {
+    if (!matrix || matrix.length === 0) return [];
+    return matrix[0].map((_, colIndex) => matrix.map(row => row[colIndex]));
+}
 
-// --- THUẬT TOÁN ĐỊNH VỊ ---
-function calculateTagPosition(distArray, roomConfig) {
-    // --- Step 1: Calculate 2D position (X, Y) using weighted centroid ---
-    let totalWeightXY = 0;
-    let weightedPosX = 0;
-    let weightedPosY = 0;
-
-    distArray.forEach(({ anchor, distance }) => {
-        const weight = 1.0 / (distance + 0.001);
-        weightedPosX += anchor.x * weight;
-        weightedPosY += anchor.y * weight;
-        totalWeightXY += weight;
-    });
-
-    if (totalWeightXY === 0) return null;
-
-    const posX = weightedPosX / totalWeightXY;
-    const posY = weightedPosY / totalWeightXY;
-
-    // --- Step 2: Calculate Z for each anchor and get a weighted average ---
-    let zEstimations = [];
-    distArray.forEach(({ anchor, distance }) => {
-        const horizontalDistSq = Math.pow(posX - anchor.x, 2) + Math.pow(posY - anchor.y, 2);
-        const distSq = Math.pow(distance, 2);
-
-        if (distSq > horizontalDistSq) {
-            const zDiff = Math.sqrt(distSq - horizontalDistSq);
-            const z1 = anchor.z - zDiff; // Solution assuming tag is below anchor
-            const z2 = anchor.z + zDiff; // Solution assuming tag is above anchor
-
-            // Heuristic: Choose the Z value that is within the room's height boundaries.
-            // This is crucial if anchors are placed at various heights.
-            const z1_in_bounds = z1 >= 0 && z1 <= roomConfig.height;
-            const z2_in_bounds = z2 >= 0 && z2 <= roomConfig.height;
-
-            let estimatedZ = z1; // Default to the 'below' solution
-            if (z1_in_bounds && !z2_in_bounds) {
-                estimatedZ = z1;
-            } else if (!z1_in_bounds && z2_in_bounds) {
-                estimatedZ = z2;
+function mat_multiply(A, B) {
+    // Handle matrix-vector multiplication
+    if (B.every(el => typeof el === 'number')) {
+        if (A[0].length !== B.length) throw new Error("Matrix dimensions are not compatible for multiplication.");
+        let result = new Array(A.length).fill(0);
+        for (let i = 0; i < A.length; i++) {
+            for (let j = 0; j < B.length; j++) {
+                result[i] += A[i][j] * B[j];
             }
-
-            // Weight for Z is higher for anchors more directly above/below the tag
-            const weightZ = 1.0 / (Math.sqrt(horizontalDistSq) + 0.01);
-            zEstimations.push({ z: estimatedZ, weight: weightZ });
         }
-    });
+        return result;
+    }
+    // Handle matrix-matrix multiplication
+    if (A[0].length !== B.length) throw new Error("Matrix dimensions are not compatible for multiplication.");
+    let result = new Array(A.length).fill(0).map(() => new Array(B[0].length).fill(0));
+    for (let i = 0; i < A.length; i++) {
+        for (let j = 0; j < B[0].length; j++) {
+            for (let k = 0; k < A[0].length; k++) {
+                result[i][j] += A[i][k] * B[k][j];
+            }
+        }
+    }
+    return result;
+}
 
-    if (zEstimations.length === 0) return null; // Cannot determine Z
+function mat_invert_3x3(m) {
+    const [[a, b, c], [d, e, f], [g, h, i]] = m;
+    const det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+    if (det === 0) return null; // Not invertible
+    const invDet = 1.0 / det;
+    const result = [
+        [(e * i - f * h) * invDet, (c * h - b * i) * invDet, (b * f - c * e) * invDet],
+        [(f * g - d * i) * invDet, (a * i - c * g) * invDet, (c * d - a * f) * invDet],
+        [(d * h - e * g) * invDet, (b * g - a * h) * invDet, (a * e - b * d) * invDet]
+    ];
+    return result;
+}
 
-    // --- Step 3: Weighted average of Z estimations ---
-    let totalWeightZ = 0;
-    let weightedPosZ = 0;
-    zEstimations.forEach(({ z, weight }) => {
-        weightedPosZ += z * weight;
-        totalWeightZ += weight;
-    });
+// --- THUẬT TOÁN ĐỊNH VỊ (MULTILATERATION) ---
+function multilateration(distArray) {
+    if (distArray.length < 4) {
+        return null;
+    }
 
-    const posZ = weightedPosZ / totalWeightZ;
+    const refAnchor = distArray[distArray.length - 1].anchor;
+    const refDist = distArray[distArray.length - 1].distance;
+    const refAnchorSq = refAnchor.x ** 2 + refAnchor.y ** 2 + refAnchor.z ** 2;
 
-    return { x: posX, y: posY, z: posZ };
+    const A = [];
+    const b = [];
+
+    for (let i = 0; i < distArray.length - 1; i++) {
+        const anchor = distArray[i].anchor;
+        const dist = distArray[i].distance;
+
+        A.push([
+            2 * (refAnchor.x - anchor.x),
+            2 * (refAnchor.y - anchor.y),
+            2 * (refAnchor.z - anchor.z)
+        ]);
+        
+        const anchorSq = anchor.x ** 2 + anchor.y ** 2 + anchor.z ** 2;
+        b.push(
+            dist ** 2 - refDist ** 2 - anchorSq + refAnchorSq
+        );
+    }
+
+    try {
+        const A_T = mat_transpose(A);
+        const A_T_A = mat_multiply(A_T, A);
+        const A_T_A_inv = mat_invert_3x3(A_T_A);
+
+        if (!A_T_A_inv) {
+             console.error("Matrix A^T*A is not invertible. Check anchor geometry.");
+             return null;
+        }
+
+        const A_T_b = mat_multiply(A_T, b);
+        const pos = mat_multiply(A_T_A_inv, A_T_b);
+        
+        return { x: pos[0], y: pos[1], z: pos[2] };
+
+    } catch (e) {
+        console.error("Error during multilateration calculation:", e);
+        return null;
+    }
 }
 
 function isValidPosition(pos) {
     if (!pos || isNaN(pos.x) || isNaN(pos.y) || isNaN(pos.z)) return false;
-    const buffer = 2; 
+    const buffer = 5; // Increase buffer to be more tolerant
     if (pos.x < -buffer || pos.x > roomConfig.length + buffer) return false;
-    if (pos.y < -buffer || pos.y > roomConfig.width + buffer) return false; 
+    if (pos.y < -buffer || pos.y > roomConfig.width + buffer) return false;
     if (pos.z < -buffer || pos.z > roomConfig.height + buffer) return false;
     return true;
 }
