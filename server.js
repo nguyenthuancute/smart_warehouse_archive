@@ -171,7 +171,51 @@ function mat_invert_3x3(m) {
 }
 
 // --- THUẬT TOÁN ĐỊNH VỊ (MULTILATERATION) ---
-function multilateration(distArray) {
+// This new implementation uses gradient descent to refine the position estimate,
+// which generally improves accuracy, especially with more anchors.
+function multilateration(distArray, { iterations = 20, learningRate = 0.01 } = {}) {
+    // Get an initial estimate using the linear method
+    const initialGuess = multilateration_linear(distArray);
+    if (!initialGuess) {
+        return null;
+    }
+
+    let currentPosition = { ...initialGuess };
+
+    // Iteratively refine the position using Gradient Descent
+    for (let iter = 0; iter < iterations; iter++) {
+        let gradient = { x: 0, y: 0, z: 0 };
+
+        // Calculate the gradient of the objective function (sum of squared errors)
+        for (const item of distArray) {
+            const { anchor, distance } = item;
+            const calculatedDist = Math.sqrt(
+                (currentPosition.x - anchor.x) ** 2 +
+                (currentPosition.y - anchor.y) ** 2 +
+                (currentPosition.z - anchor.z) ** 2
+            );
+
+            if (calculatedDist < 1e-6) continue; // Avoid division by zero
+
+            // Derivative of squared error: 2 * (calculatedDist - distance) * (derivative of calculatedDist)
+            // Derivative of calculatedDist wrt x is (currentPosition.x - anchor.x) / calculatedDist
+            const commonFactor = 2 * (1 - distance / calculatedDist);
+            gradient.x += commonFactor * (currentPosition.x - anchor.x);
+            gradient.y += commonFactor * (currentPosition.y - anchor.y);
+            gradient.z += commonFactor * (currentPosition.z - anchor.z);
+        }
+
+        // Update the position by moving against the gradient
+        currentPosition.x -= learningRate * gradient.x;
+        currentPosition.y -= learningRate * gradient.y;
+        currentPosition.z -= learningRate * gradient.z;
+    }
+
+    return currentPosition;
+}
+
+// Solves the linearized system of equations to get a good initial guess.
+function multilateration_linear(distArray) {
     if (distArray.length < 4) {
         return null;
     }
@@ -215,10 +259,11 @@ function multilateration(distArray) {
         return { x: pos[0], y: pos[1], z: pos[2] };
 
     } catch (e) {
-        console.error("Error during multilateration calculation:", e);
+        console.error("Error during linear multilateration calculation:", e);
         return null;
     }
 }
+
 
 function isValidPosition(pos) {
     if (!pos || isNaN(pos.x) || isNaN(pos.y) || isNaN(pos.z)) return false;

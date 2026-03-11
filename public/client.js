@@ -378,6 +378,37 @@ function updateObjectMovement() {
 
 
 // --- UI & EVENT LISTENERS ---
+
+let isRecording = false;
+const btnRecordHistory = document.getElementById('btn-record-history');
+const tagHistoryTableBody = document.getElementById('tag-history-table-body');
+let tagHistoryData = [];
+
+btnRecordHistory.addEventListener('click', () => {
+    isRecording = !isRecording;
+    btnRecordHistory.textContent = isRecording ? 'Stop' : 'Record';
+    btnRecordHistory.classList.toggle('active', isRecording);
+});
+
+function renderTagHistoryTable() {
+    tagHistoryTableBody.innerHTML = '';
+    tagHistoryData.forEach(entry => {
+        const row = `<tr>
+            <td>${entry.timestamp}</td>
+            <td><b>${entry.id}</b></td>
+            <td>${entry.x.toFixed(2)}</td>
+            <td>${entry.y.toFixed(2)}</td>
+            <td>${entry.z.toFixed(2)}</td>
+        </tr>`;
+        tagHistoryTableBody.innerHTML += row;
+    });
+    const container = document.querySelector('#tag-history-section .collapsible-content');
+    if (container) {
+        container.scrollTop = container.scrollHeight;
+    }
+}
+
+
 function updateCollapsibleHeight(content) {
     if (content && content.style.maxHeight && content.style.maxHeight !== '0px' && content.style.maxHeight !== 'fit-content') {
         content.style.maxHeight = content.scrollHeight + "px";
@@ -558,6 +589,22 @@ socket.on('tags_update', (data) => {
     tagDataStore = data;
     updateTags3D(data);
     updateTable(data);
+
+    if (isRecording) {
+        const now = new Date();
+        const timestamp = now.toLocaleTimeString();
+        Object.keys(data).forEach(id => {
+            const pos = data[id];
+            tagHistoryData.push({
+                timestamp: timestamp,
+                id: id,
+                x: pos.x,
+                y: pos.y,
+                z: pos.z
+            });
+        });
+        renderTagHistoryTable();
+    }
 });
 
 // --- ANIMATION LOOP & RESIZE ---

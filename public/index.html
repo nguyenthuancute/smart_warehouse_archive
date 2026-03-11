@@ -65,12 +65,24 @@
                     </div>
 
                      <div class="panel-section" id="tags-section">
-                        <h2 class="collapsible active">Tags Real-time</h2>
+                        <h2 class="collapsible active">Tags Real-time <button id="btn-record-history" class="btn-secondary">Record</button></h2>
                         <div class="collapsible-content" style="max-height: fit-content;">
                             <div class="table-container">
                                 <table id="tag-table">
                                     <thead><tr><th>ID</th><th>X</th><th>Y</th><th>Z</th><th>+/-</th></tr></thead>
                                     <tbody id="tag-table-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel-section" id="tag-history-section">
+                        <h2 class="collapsible">Tag History</h2>
+                        <div class="collapsible-content">
+                            <div class="table-container">
+                                <table id="tag-history-table">
+                                    <thead><tr><th>Timestamp</th><th>ID</th><th>X</th><th>Y</th><th>Z</th></tr></thead>
+                                    <tbody id="tag-history-table-body"></tbody>
                                 </table>
                             </div>
                         </div>
