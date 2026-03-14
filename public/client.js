@@ -380,33 +380,42 @@ function updateObjectMovement() {
 // --- UI & EVENT LISTENERS ---
 
 let isRecording = false;
-const btnRecordHistory = document.getElementById('btn-record-history');
-const tagHistoryTableBody = document.getElementById('tag-history-table-body');
-let tagHistoryData = [];
+const btnRecordLog = document.getElementById('btn-record-log');
+const logFileList = document.getElementById('log-file-list');
+let currentLogData = [];
 
-btnRecordHistory.addEventListener('click', () => {
+btnRecordLog.addEventListener('click', () => {
     isRecording = !isRecording;
-    btnRecordHistory.textContent = isRecording ? 'Stop' : 'Record';
-    btnRecordHistory.classList.toggle('active', isRecording);
-});
+    btnRecordLog.textContent = isRecording ? 'Stop' : 'Record';
+    btnRecordLog.classList.toggle('active', isRecording);
 
-function renderTagHistoryTable() {
-    tagHistoryTableBody.innerHTML = '';
-    tagHistoryData.forEach(entry => {
-        const row = `<tr>
-            <td>${entry.timestamp}</td>
-            <td><b>${entry.id}</b></td>
-            <td>${entry.x.toFixed(2)}</td>
-            <td>${entry.y.toFixed(2)}</td>
-            <td>${entry.z.toFixed(2)}</td>
-        </tr>`;
-        tagHistoryTableBody.innerHTML += row;
-    });
-    const container = document.querySelector('#tag-history-section .collapsible-content');
-    if (container) {
-        container.scrollTop = container.scrollHeight;
+    if (!isRecording && currentLogData.length > 0) {
+        // Stop recording and generate file
+        const csvContent = "data:text/csv;charset=utf-8," 
+            + "Timestamp,ID,X,Y,Z\n" 
+            + currentLogData.map(e => `${e.timestamp},${e.id},${e.x.toFixed(3)},${e.y.toFixed(3)},${e.z.toFixed(3)}`).join("\n");
+        
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        
+        const now = new Date();
+        const filename = `tag_log_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}.csv`;
+        link.setAttribute("download", filename);
+        link.textContent = filename;
+
+        const listItem = document.createElement('li');
+        listItem.appendChild(link);
+        logFileList.appendChild(listItem);
+
+        currentLogData = []; // Reset for next recording
+         updateCollapsibleHeight(document.querySelector('#tag-history-section .collapsible-content'));
+
+    } else if (isRecording) {
+        // Start recording
+        currentLogData = [];
     }
-}
+});
 
 
 function updateCollapsibleHeight(content) {
@@ -592,10 +601,10 @@ socket.on('tags_update', (data) => {
 
     if (isRecording) {
         const now = new Date();
-        const timestamp = now.toLocaleTimeString();
+        const timestamp = now.toLocaleTimeString('it-IT'); // Use a consistent format
         Object.keys(data).forEach(id => {
             const pos = data[id];
-            tagHistoryData.push({
+            currentLogData.push({
                 timestamp: timestamp,
                 id: id,
                 x: pos.x,
@@ -603,7 +612,6 @@ socket.on('tags_update', (data) => {
                 z: pos.z
             });
         });
-        renderTagHistoryTable();
     }
 });
 
