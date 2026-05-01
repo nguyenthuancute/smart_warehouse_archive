@@ -729,65 +729,66 @@ const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
     btnLoadMekong.addEventListener('click', () => {
-        // 1. Cập nhật kích thước phòng tổng thể dựa theo tỷ lệ bản CAD (Giả sử: 20.4m x 9.0m, cao 4m)
+        // 1. Cập nhật kích thước phòng tổng thể
         document.getElementById('inpL').value = 20.4;
         document.getElementById('inpW').value = 9.0;
         document.getElementById('inpH').value = 4.0;
         updateRoom();
 
-        // 2. Dọn dẹp các khối kệ cũ (nếu người dùng bấm nhiều lần)
+        // 2. Tìm hoặc tạo Group chứa kho giả lập (Cách này giúp tránh lỗi undefined)
+        let presetGroup = scene.getObjectByName('presetGroup');
+        if (!presetGroup) {
+            presetGroup = new THREE.Group();
+            presetGroup.name = 'presetGroup';
+            scene.add(presetGroup);
+        }
+
+        // Dọn dẹp kệ cũ (nếu người dùng bấm nút nhiều lần)
         while (presetGroup.children.length > 0) {
             presetGroup.remove(presetGroup.children[0]);
         }
 
-        // 3. Hàm hỗ trợ vẽ các kệ hàng nhanh chóng
-        function createRack(color, x, z, w, l, h) {
-            const geo = new THREE.BoxGeometry(w, h, l);
-            // Thêm viền đen (Edges) cho giống bản vẽ kỹ thuật
+        // 3. Hàm tạo vật thể 3D nhanh (có viền đen cho giống bản vẽ kỹ thuật)
+        function createRack(color, x, z, sizeX, sizeY, sizeZ) {
+            const geo = new THREE.BoxGeometry(sizeX, sizeY, sizeZ);
             const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.7 });
             const mesh = new THREE.Mesh(geo, mat);
             
             const edges = new THREE.EdgesGeometry(geo);
-            const lineMat = new THREE.LineBasicMaterial({ color: 0x000000 });
+            const lineMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
             const wireframe = new THREE.LineSegments(edges, lineMat);
             mesh.add(wireframe);
 
-            // Three.js tính trục Y là chiều cao, Z là chiều sâu
-            mesh.position.set(x, h / 2, z); 
+            // Three.js tính gốc tọa độ vật thể ở tâm, nên chia đôi sizeY để kệ nằm bám mặt sàn
+            mesh.position.set(x, sizeY / 2, z); 
             presetGroup.add(mesh);
         }
 
-        // 4. Mô phỏng Layout theo bản vẽ CAD
-        // Dãy kệ bên trái (Màu xanh lam - Blue)
+        // 4. MÔ PHỎNG LAYOUT CAD (Đã map theo đúng tọa độ X, Z của lưới)
+        // Chiều dài 20.4m (Trục X) | Chiều rộng 9.0m (Trục Z)
+
+        // Dãy kệ màu xanh lam (Tương ứng bên trái bản CAD -> map sang Z = 2)
         for(let i = 0; i < 4; i++) {
-            createRack(0x0055ff, 4, 2 + i * 1.5, 1.2, 1, 3); // Dãy trên
-            createRack(0x0055ff, 4, 10 + i * 1.5, 1.2, 1, 3); // Dãy dưới
+            createRack(0x0055ff, 7 + i * 1.5, 2, 1.2, 3, 1.2);  // Khối dưới
+            createRack(0x0055ff, 14 + i * 1.5, 2, 1.2, 3, 1.2); // Khối trên
         }
 
-        // Khối ở giữa (Băng chuyền hoặc kệ lớn dài)
-        createRack(0xcccccc, 8, 8, 1, 14, 1.5);
+        // Băng chuyền / Dãy kệ dài xám ở giữa (Tương ứng Z = 4.5)
+        createRack(0xcccccc, 12.5, 4.5, 14, 1.5, 1.2);
 
-        // Dãy kệ bên phải (Màu đỏ và Trắng)
-        for(let i = 0; i < 9; i++) {
-            // Kệ đỏ
-            createRack(0xff2222, 11, 2 + i * 1.2, 1.2, 1, 3);
-            // Kệ trắng (kế bên)
-            createRack(0xffffff, 13, 2 + i * 1.2, 1.2, 1, 3);
+        // Dãy kệ Trắng và Đỏ (Tương ứng bên phải bản CAD -> map sang Z = 7)
+        for(let i = 0; i < 5; i++) {
+            createRack(0xffffff, 6.5 + i * 1.5, 7, 1.2, 3, 1.2); // Khối Trắng (dưới)
+            createRack(0xff2222, 14 + i * 1.5, 7, 1.2, 3, 1.2);  // Khối Đỏ (trên)
         }
 
-        // Khu vực bãi tập kết phía dưới (Màu vàng, đỏ, trắng)
-        createRack(0xffcc00, 4, 18, 1.2, 1.2, 0.5);
-        createRack(0xffffff, 6, 18, 1.2, 1.2, 0.5);
-        createRack(0xff2222, 8, 18, 1.2, 1.2, 0.5);
-        
-        // 5. Căn chỉnh lại Camera để nhìn bao quát toàn bộ Layout vừa tạo
-        camera.position.set(10, 18, 25);
+        // Bãi tập kết hàng / Các pallet nhỏ ở gần cửa (Tương ứng X = 2.5)
+        createRack(0xffcc00, 2.5, 3, 1, 0.8, 1);   // Vàng
+        createRack(0xffffff, 2.5, 5.2, 1, 0.8, 1); // Trắng
+        createRack(0xff2222, 2.5, 7.4, 1, 0.8, 1); // Đỏ
+
+        // 5. Chỉnh Camera tự động bay lên cao để nhìn bao quát toàn bộ kho vừa tải
+        camera.position.set(10.2, 16, 22);
         controls.target.set(10.2, 0, 4.5);
-        
-        // 6. Cập nhật lại UI Panel nếu cần
-        const collContent = document.querySelector('#presets-section .collapsible-content');
-        if (collContent) {
-            collContent.style.maxHeight = collContent.scrollHeight + "px";
-        }
     });
 }
