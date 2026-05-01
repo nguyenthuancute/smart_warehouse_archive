@@ -724,3 +724,70 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) ---
+const btnLoadMekong = document.getElementById('btn-load-mekong');
+
+if (btnLoadMekong) {
+    btnLoadMekong.addEventListener('click', () => {
+        // 1. Cập nhật kích thước phòng tổng thể dựa theo tỷ lệ bản CAD (Giả sử: 20.4m x 9.0m, cao 4m)
+        document.getElementById('inpL').value = 20.4;
+        document.getElementById('inpW').value = 9.0;
+        document.getElementById('inpH').value = 4.0;
+        updateRoom();
+
+        // 2. Dọn dẹp các khối kệ cũ (nếu người dùng bấm nhiều lần)
+        while (presetGroup.children.length > 0) {
+            presetGroup.remove(presetGroup.children[0]);
+        }
+
+        // 3. Hàm hỗ trợ vẽ các kệ hàng nhanh chóng
+        function createRack(color, x, z, w, l, h) {
+            const geo = new THREE.BoxGeometry(w, h, l);
+            // Thêm viền đen (Edges) cho giống bản vẽ kỹ thuật
+            const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.7 });
+            const mesh = new THREE.Mesh(geo, mat);
+            
+            const edges = new THREE.EdgesGeometry(geo);
+            const lineMat = new THREE.LineBasicMaterial({ color: 0x000000 });
+            const wireframe = new THREE.LineSegments(edges, lineMat);
+            mesh.add(wireframe);
+
+            // Three.js tính trục Y là chiều cao, Z là chiều sâu
+            mesh.position.set(x, h / 2, z); 
+            presetGroup.add(mesh);
+        }
+
+        // 4. Mô phỏng Layout theo bản vẽ CAD
+        // Dãy kệ bên trái (Màu xanh lam - Blue)
+        for(let i = 0; i < 4; i++) {
+            createRack(0x0055ff, 4, 2 + i * 1.5, 1.2, 1, 3); // Dãy trên
+            createRack(0x0055ff, 4, 10 + i * 1.5, 1.2, 1, 3); // Dãy dưới
+        }
+
+        // Khối ở giữa (Băng chuyền hoặc kệ lớn dài)
+        createRack(0xcccccc, 8, 8, 1, 14, 1.5);
+
+        // Dãy kệ bên phải (Màu đỏ và Trắng)
+        for(let i = 0; i < 9; i++) {
+            // Kệ đỏ
+            createRack(0xff2222, 11, 2 + i * 1.2, 1.2, 1, 3);
+            // Kệ trắng (kế bên)
+            createRack(0xffffff, 13, 2 + i * 1.2, 1.2, 1, 3);
+        }
+
+        // Khu vực bãi tập kết phía dưới (Màu vàng, đỏ, trắng)
+        createRack(0xffcc00, 4, 18, 1.2, 1.2, 0.5);
+        createRack(0xffffff, 6, 18, 1.2, 1.2, 0.5);
+        createRack(0xff2222, 8, 18, 1.2, 1.2, 0.5);
+        
+        // 5. Căn chỉnh lại Camera để nhìn bao quát toàn bộ Layout vừa tạo
+        camera.position.set(10, 18, 25);
+        controls.target.set(10.2, 0, 4.5);
+        
+        // 6. Cập nhật lại UI Panel nếu cần
+        const collContent = document.querySelector('#presets-section .collapsible-content');
+        if (collContent) {
+            collContent.style.maxHeight = collContent.scrollHeight + "px";
+        }
+    });
+}
