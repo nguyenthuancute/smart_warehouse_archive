@@ -724,18 +724,16 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - FIX CHUẨN XÁC THEO CAD ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - UPDATED WIDTH & COLOR ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
     btnLoadMekong.addEventListener('click', () => {
-        // 1. Cập nhật kích thước phòng (X: ngang 9m, Z: dọc 20.4m)
-        document.getElementById('inpL').value = 9.0;
+        document.getElementById('inpL').value = 15.0; // Widened room for the 7m gap
         document.getElementById('inpW').value = 20.4;
         document.getElementById('inpH').value = 4.0;
         updateRoom();
 
-        // 2. Quản lý Group chứa layout
         let presetGroup = scene.getObjectByName('presetGroup');
         if (!presetGroup) {
             presetGroup = new THREE.Group();
@@ -746,7 +744,6 @@ if (btnLoadMekong) {
             presetGroup.remove(presetGroup.children[0]);
         }
 
-        // 3. Hàm tạo khối kệ
         function createRack(color, x, z, sizeX, sizeZ, sizeY) {
             const geo = new THREE.BoxGeometry(sizeX, sizeY, sizeZ);
             const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.7 });
@@ -756,52 +753,34 @@ if (btnLoadMekong) {
             const lineMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
             const wireframe = new THREE.LineSegments(edges, lineMat);
             mesh.add(wireframe);
-
-            // Gốc tọa độ Y = sizeY / 2 để chạm sàn
             mesh.position.set(x, sizeY / 2, z); 
             presetGroup.add(mesh);
         }
 
-        // --- 4. TẠO CÁC DÃY TỪ TRÁI SANG PHẢI ---
         const rackWidth = 1.0; 
         const rackLength = 1.0; 
-        const lowHeight = 1.5;  // Hàng thấp
-        const highHeight = 3.0; // Hàng cao
+        const lowHeight = 1.5; 
+        const highHeight = 3.0; 
 
-        // Dòng lặp chung cho chiều dọc (14 đơn vị chiều dài, chừa khoảng trống tạo cụm)
         for(let i = 0; i < 14; i++) {
-            const currentZ = 2.5 + i * 1.0; // Tọa độ Z chạy dọc xuống
+            const currentZ = 2.5 + i * 1.0; 
 
-            // DÃY 1 & DÃY 2 (Hàng thấp, đứt đoạn làm 3 cụm)
-            // Bỏ qua vị trí i=4 và i=9 để tạo lối đi ngang (chia thành 3 cụm: 0-3, 5-8, 10-13)
             if (i !== 4 && i !== 9) {
-                // Dãy 1 (Hàng thấp - Trái cùng)
                 createRack(0x1d4ed8, 1.2, currentZ, rackWidth, rackLength, lowHeight); 
-                // Dãy 2 (Hàng thấp - Cạnh băng chuyền)
                 createRack(0x1d4ed8, 3.8, currentZ, rackWidth, rackLength, lowHeight); 
             }
 
-            // DÃY 3 & DÃY 4 (Hàng cao, liền mạch toàn bộ)
-            // Màu sắc chia nửa: 7 ô trên xám/trắng, 7 ô dưới đỏ
-            const highColor = (i < 7) ? 0xd1d5db : 0xdc2626;
-            
-            // Dãy 3 (Hàng cao) - Nằm sau lối đi rộng
-            createRack(highColor, 6.0, currentZ, rackWidth, rackLength, highHeight);
-            // Dãy 4 (Hàng cao) - Sát mép phải
-            createRack(highColor, 7.5, currentZ, rackWidth, rackLength, highHeight);
+            // Both rows are fully red with a 7-meter gap between X: 6.0 and X: 13.0
+            createRack(0xdc2626, 6.0, currentZ, rackWidth, rackLength, highHeight);
+            createRack(0xdc2626, 13.0, currentZ, rackWidth, rackLength, highHeight);
         }
 
-        // BĂNG CHUYỀN (Nằm giữa Dãy 1 và Dãy 2)
-        // Chiều dài 14m, tâm Z = 9.0
         createRack(0x9ca3af, 2.5, 9.0, 0.8, 14.0, 0.5);
+        createRack(0xeab308, 2.0, 18.5, 0.8, 0.8, 0.5); 
+        createRack(0xd1d5db, 3.5, 18.5, 0.8, 0.8, 0.5); 
+        createRack(0xdc2626, 5.0, 18.5, 0.8, 0.8, 0.5); 
 
-        // BA KHỐI TẬP KẾT NHỎ (Ở gần cửa ra vào phía dưới)
-        createRack(0xeab308, 2.0, 18.5, 0.8, 0.8, 0.5); // Vàng
-        createRack(0xd1d5db, 3.5, 18.5, 0.8, 0.8, 0.5); // Trắng
-        createRack(0xdc2626, 5.0, 18.5, 0.8, 0.8, 0.5); // Đỏ
-
-        // 5. Điều chỉnh Camera bao quát
-        camera.position.set(4.5, 22, 26);
-        controls.target.set(4.5, 0, 10);
+        camera.position.set(7.5, 24, 28);
+        controls.target.set(7.5, 0, 10);
     });
 }
