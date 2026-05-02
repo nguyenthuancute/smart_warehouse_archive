@@ -724,12 +724,11 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - CĂN BẰNG & ĐỒNG BỘ 2 DÃY ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - CĂN KẾT SÁT CÁC DÃY ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
     btnLoadMekong.addEventListener('click', () => {
-        // Cập nhật không gian kho 15x30x5
         document.getElementById('inpL').value = 15.0;
         document.getElementById('inpW').value = 30.0;
         document.getElementById('inpH').value = 5.0;
@@ -761,31 +760,24 @@ if (btnLoadMekong) {
         const lowHeight = 1.5; 
         const highHeight = 3.0; 
 
-        // 1. Vẽ dãy hàng thấp (màu xanh): Bắt đầu từ đầu kho (Z tâm = 2.0)
         for(let i = 0; i < 14; i++) {
             const currentZ = 2.0 + i * 1.0; 
 
             if (i !== 4 && i !== 9) {
-                createRack(0x1d4ed8, 1.5, currentZ, rackWidth, 1.0, lowHeight); 
-                createRack(0x1d4ed8, 4.1, currentZ, rackWidth, 1.0, lowHeight); 
+                createRack(0x1d4ed8, 3.0, currentZ, rackWidth, 1.0, lowHeight); 
+                createRack(0x1d4ed8, 5.6, currentZ, rackWidth, 1.0, lowHeight); 
             }
         }
 
-        // 2. Vẽ băng chuyền (màu xám): Tâm Z = 8.5 để căn giữa hoàn hảo với dãy thấp
-        createRack(0x9ca3af, 2.8, 8.5, 0.8, 14.0, 0.5);
+        createRack(0x9ca3af, 4.3, 8.5, 0.8, 14.0, 0.5);
 
-        // 3. Vẽ dãy hàng cao (màu đỏ): Bắt đầu cùng mốc với dãy thấp
-        // Chiều dài mỗi hộp = 1.2m -> Tổng dài = 14.4m
         for(let i = 0; i < 12; i++) {
-            // Z tâm của hộp đầu tiên = 2.1 để mép hộp chạm vạch 1.5 (ngang bằng dãy xanh)
             const currentZ = 2.1 + i * 1.2; 
             
-            // X=7.5 (giữ khoảng cách rộng ở giữa) và X=14.5 (ép sát kịch mép tường phải)
             createRack(0xdc2626, 7.5, currentZ, rackWidth, 1.2, highHeight);
             createRack(0xdc2626, 14.5, currentZ, rackWidth, 1.2, highHeight);
         }
 
-        // Thiết lập lại góc nhìn Camera để bao quát từ trên cao xuống toàn bộ kho
         camera.position.set(7.5, 28, 25);
         controls.target.set(7.5, 0, 10);
     });
