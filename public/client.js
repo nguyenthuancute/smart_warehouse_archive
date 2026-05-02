@@ -724,12 +724,12 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - DỜI LÊN ĐẦU KHO ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - CÂN BẰNG CHIỀU DÀI & ĐẨY VỀ CUỐI TƯỜNG ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
     btnLoadMekong.addEventListener('click', () => {
-        // Giữ nguyên không gian kho 15x30x5
+        // Cập nhật không gian kho 15x30x5
         document.getElementById('inpL').value = 15.0;
         document.getElementById('inpW').value = 30.0;
         document.getElementById('inpH').value = 5.0;
@@ -745,7 +745,7 @@ if (btnLoadMekong) {
             presetGroup.remove(presetGroup.children[0]);
         }
 
-        // Hàm tạo hình hộp
+        // Hàm tạo hình hộp với tham số (màu sắc, tọa độ X, tọa độ Z, rộng, dài, cao)
         function createRack(color, x, z, sizeX, sizeZ, sizeY) {
             const geo = new THREE.BoxGeometry(sizeX, sizeY, sizeZ);
             const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.7 });
@@ -762,7 +762,7 @@ if (btnLoadMekong) {
         const lowHeight = 1.5; 
         const highHeight = 3.0; 
 
-        // 1. Vẽ dãy hàng thấp (màu xanh): Bắt đầu từ tọa độ Z = 1.5 (sát tường đầu kho)
+        // 1. Vẽ dãy hàng thấp (màu xanh) và Băng chuyền: Giữ nguyên ở đầu kho
         for(let i = 0; i < 14; i++) {
             const currentZ = 1.5 + i * 1.0; 
 
@@ -771,20 +771,23 @@ if (btnLoadMekong) {
                 createRack(0x1d4ed8, 4.1, currentZ, rackWidth, 1.0, lowHeight); 
             }
         }
-
-        // 2. Vẽ băng chuyền (màu xám): Dời tâm Z về 8.0 để khớp với dãy hàng thấp
+        // Băng chuyền: Z trung tâm là 8.0 để khớp với dãy thấp
         createRack(0x9ca3af, 2.8, 8.0, 0.8, 14.0, 0.5);
 
-        // 3. Vẽ dãy hàng cao (màu đỏ): Bắt đầu từ tọa độ Z = 1.75
+        // 2. Vẽ dãy hàng cao (màu đỏ): Đẩy về góc tường cuối kho
+        // Chiều dài mỗi hộp giảm còn 1.2m -> Tổng dài = 12 * 1.2 = 14.4m
         for(let i = 0; i < 12; i++) {
-            const currentZ = 1.75 + i * 1.5; 
+            // Tọa độ Z bắt đầu từ 16.2 để mép của hộp cuối cùng chạm chính xác mốc Z = 30
+            const currentZ = 16.2 + i * 1.2; 
             
-            createRack(0xdc2626, 6.0, currentZ, rackWidth, 1.5, highHeight);
-            createRack(0xdc2626, 13.0, currentZ, rackWidth, 1.5, highHeight);
+            // X=14.5 để chạm sát tường bên phải. 
+            // X=7.5 để giữ khoảng cách 7m so với dãy sát tường.
+            createRack(0xdc2626, 7.5, currentZ, rackWidth, 1.2, highHeight);
+            createRack(0xdc2626, 14.5, currentZ, rackWidth, 1.2, highHeight);
         }
 
-        // Thiết lập lại góc nhìn của Camera để tập trung vào khu vực đầu kho
-        camera.position.set(7.5, 28, 25);
-        controls.target.set(7.5, 0, 10);
+        // Thiết lập lại góc nhìn của Camera để bạn thấy được toàn cảnh đường chéo kho
+        camera.position.set(7.5, 32, 20);
+        controls.target.set(7.5, 0, 15);
     });
 }
