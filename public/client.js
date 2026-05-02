@@ -724,7 +724,7 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - DỜI XUỐNG CUỐI KHO ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - DỜI LÊN ĐẦU KHO ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
@@ -762,9 +762,9 @@ if (btnLoadMekong) {
         const lowHeight = 1.5; 
         const highHeight = 3.0; 
 
-        // 1. Vẽ dãy hàng thấp (màu xanh): dời tọa độ Z bắt đầu từ 14.5
+        // 1. Vẽ dãy hàng thấp (màu xanh): Bắt đầu từ tọa độ Z = 1.5 (sát tường đầu kho)
         for(let i = 0; i < 14; i++) {
-            const currentZ = 14.5 + i * 1.0; 
+            const currentZ = 1.5 + i * 1.0; 
 
             if (i !== 4 && i !== 9) {
                 createRack(0x1d4ed8, 1.5, currentZ, rackWidth, 1.0, lowHeight); 
@@ -772,19 +772,19 @@ if (btnLoadMekong) {
             }
         }
 
-        // 2. Vẽ băng chuyền (màu xám): Dời tâm Z lên mốc 21.0
-        createRack(0x9ca3af, 2.8, 21.0, 0.8, 14.0, 0.5);
+        // 2. Vẽ băng chuyền (màu xám): Dời tâm Z về 8.0 để khớp với dãy hàng thấp
+        createRack(0x9ca3af, 2.8, 8.0, 0.8, 14.0, 0.5);
 
-        // 3. Vẽ dãy hàng cao (màu đỏ): dời tọa độ Z bắt đầu từ 12.75 (sẽ kết thúc vừa vặn ở Z=30)
+        // 3. Vẽ dãy hàng cao (màu đỏ): Bắt đầu từ tọa độ Z = 1.75
         for(let i = 0; i < 12; i++) {
-            const currentZ = 12.75 + i * 1.5; 
+            const currentZ = 1.75 + i * 1.5; 
             
             createRack(0xdc2626, 6.0, currentZ, rackWidth, 1.5, highHeight);
             createRack(0xdc2626, 13.0, currentZ, rackWidth, 1.5, highHeight);
         }
 
-        // Thiết lập lại góc nhìn của Camera bao quát về phía cuối kho
-        camera.position.set(7.5, 30, 38);
-        controls.target.set(7.5, 0, 20);
+        // Thiết lập lại góc nhìn của Camera để tập trung vào khu vực đầu kho
+        camera.position.set(7.5, 28, 25);
+        controls.target.set(7.5, 0, 10);
     });
 }
