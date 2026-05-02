@@ -724,7 +724,7 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - MỞ RỘNG KHOẢNG CÁCH DÃY THẤP ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - ÉP SÁT VÀO DÃY CAO ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
@@ -761,24 +761,28 @@ if (btnLoadMekong) {
         const lowHeight = 1.5; 
         const highHeight = 3.0; 
 
-        // 1. Vẽ dãy hàng thấp (màu xanh): Nới rộng khoảng cách với băng chuyền
+        // 1. Vẽ dãy hàng thấp (màu xanh): Đẩy sát vào dãy cao
         for(let i = 0; i < 14; i++) {
             const currentZ = 2.0 + i * 1.0; 
 
             if (i !== 4 && i !== 9) {
-                createRack(0x1d4ed8, 1.5, currentZ, rackWidth, 1.0, lowHeight); 
-                createRack(0x1d4ed8, 5.5, currentZ, rackWidth, 1.0, lowHeight); 
+                // Dãy thấp 1 dời lên X = 2.4
+                createRack(0x1d4ed8, 2.4, currentZ, rackWidth, 1.0, lowHeight); 
+                // Dãy thấp 2 dời lên X = 6.4 (cách mép dãy cao đúng 0.1)
+                createRack(0x1d4ed8, 6.4, currentZ, rackWidth, 1.0, lowHeight); 
             }
         }
 
-        // 2. Vẽ băng chuyền (màu xám): Căn giữa 2 dãy thấp tại X = 3.5
-        createRack(0x9ca3af, 3.5, 8.5, 0.8, 14.0, 0.5);
+        // 2. Vẽ băng chuyền (màu xám): Căn giữa 2 dãy thấp tại X = 4.4
+        createRack(0x9ca3af, 4.4, 8.5, 0.8, 14.0, 0.5);
 
         // 3. Vẽ dãy hàng cao (màu đỏ): Giữ nguyên vị trí
         for(let i = 0; i < 12; i++) {
             const currentZ = 2.1 + i * 1.2; 
             
+            // Dãy cao 1 tâm X = 7.5
             createRack(0xdc2626, 7.5, currentZ, rackWidth, 1.2, highHeight);
+            // Dãy cao 2 tâm X = 14.5
             createRack(0xdc2626, 14.5, currentZ, rackWidth, 1.2, highHeight);
         }
 
