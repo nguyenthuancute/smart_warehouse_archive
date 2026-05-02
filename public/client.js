@@ -724,7 +724,7 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - ÉP KỊCH TƯỜNG ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - BỎ Ô CUỐI DÃY CAO ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
@@ -761,7 +761,7 @@ if (btnLoadMekong) {
         const lowHeight = 1.5; 
         const highHeight = 3.0; 
 
-        // 1. Vẽ dãy hàng thấp (màu xanh): Đẩy sát mép tường (Tâm Z bắt đầu từ 0.5 vì hộp dài 1.0)
+        // 1. Vẽ dãy hàng thấp (màu xanh): Vẫn ép sát mép tường (Tâm Z bắt đầu từ 0.5)
         for(let i = 0; i < 14; i++) {
             const currentZ = 0.5 + i * 1.0; 
 
@@ -771,18 +771,18 @@ if (btnLoadMekong) {
             }
         }
 
-        // 2. Vẽ băng chuyền (màu xám): Chiều dài 14.0 -> Tâm Z là 7.0 để mép chạm 0
+        // 2. Vẽ băng chuyền (màu xám): Ép sát tường
         createRack(0x9ca3af, 4.4, 7.0, 0.8, 14.0, 0.5);
 
-        // 3. Vẽ dãy hàng cao (màu đỏ): 13 ô. Đẩy sát mép tường (Tâm Z bắt đầu từ 0.6 vì hộp dài 1.2)
-        for(let i = 0; i < 13; i++) {
+        // 3. Vẽ dãy hàng cao (màu đỏ): Giảm xuống còn 12 ô, cắt đi ô cuối cùng
+        for(let i = 0; i < 12; i++) {
             const currentZ = 0.6 + i * 1.2; 
             
             createRack(0xdc2626, 7.5, currentZ, rackWidth, 1.2, highHeight);
             createRack(0xdc2626, 14.5, currentZ, rackWidth, 1.2, highHeight);
         }
 
-        // Thiết lập lại góc nhìn Camera để bao quát
+        // Thiết lập lại góc nhìn Camera
         camera.position.set(7.5, 28, 22);
         controls.target.set(7.5, 0, 10);
     });
