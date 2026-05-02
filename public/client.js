@@ -724,7 +724,7 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - CÂN BẰNG CHIỀU DÀI & ĐẨY VỀ CUỐI TƯỜNG ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - CĂN BẰNG & ĐỒNG BỘ 2 DÃY ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
@@ -745,7 +745,6 @@ if (btnLoadMekong) {
             presetGroup.remove(presetGroup.children[0]);
         }
 
-        // Hàm tạo hình hộp với tham số (màu sắc, tọa độ X, tọa độ Z, rộng, dài, cao)
         function createRack(color, x, z, sizeX, sizeZ, sizeY) {
             const geo = new THREE.BoxGeometry(sizeX, sizeY, sizeZ);
             const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.7 });
@@ -762,32 +761,32 @@ if (btnLoadMekong) {
         const lowHeight = 1.5; 
         const highHeight = 3.0; 
 
-        // 1. Vẽ dãy hàng thấp (màu xanh) và Băng chuyền: Giữ nguyên ở đầu kho
+        // 1. Vẽ dãy hàng thấp (màu xanh): Bắt đầu từ đầu kho (Z tâm = 2.0)
         for(let i = 0; i < 14; i++) {
-            const currentZ = 1.5 + i * 1.0; 
+            const currentZ = 2.0 + i * 1.0; 
 
             if (i !== 4 && i !== 9) {
                 createRack(0x1d4ed8, 1.5, currentZ, rackWidth, 1.0, lowHeight); 
                 createRack(0x1d4ed8, 4.1, currentZ, rackWidth, 1.0, lowHeight); 
             }
         }
-        // Băng chuyền: Z trung tâm là 8.0 để khớp với dãy thấp
-        createRack(0x9ca3af, 2.8, 8.0, 0.8, 14.0, 0.5);
 
-        // 2. Vẽ dãy hàng cao (màu đỏ): Đẩy về góc tường cuối kho
-        // Chiều dài mỗi hộp giảm còn 1.2m -> Tổng dài = 12 * 1.2 = 14.4m
+        // 2. Vẽ băng chuyền (màu xám): Tâm Z = 8.5 để căn giữa hoàn hảo với dãy thấp
+        createRack(0x9ca3af, 2.8, 8.5, 0.8, 14.0, 0.5);
+
+        // 3. Vẽ dãy hàng cao (màu đỏ): Bắt đầu cùng mốc với dãy thấp
+        // Chiều dài mỗi hộp = 1.2m -> Tổng dài = 14.4m
         for(let i = 0; i < 12; i++) {
-            // Tọa độ Z bắt đầu từ 16.2 để mép của hộp cuối cùng chạm chính xác mốc Z = 30
-            const currentZ = 16.2 + i * 1.2; 
+            // Z tâm của hộp đầu tiên = 2.1 để mép hộp chạm vạch 1.5 (ngang bằng dãy xanh)
+            const currentZ = 2.1 + i * 1.2; 
             
-            // X=14.5 để chạm sát tường bên phải. 
-            // X=7.5 để giữ khoảng cách 7m so với dãy sát tường.
+            // X=7.5 (giữ khoảng cách rộng ở giữa) và X=14.5 (ép sát kịch mép tường phải)
             createRack(0xdc2626, 7.5, currentZ, rackWidth, 1.2, highHeight);
             createRack(0xdc2626, 14.5, currentZ, rackWidth, 1.2, highHeight);
         }
 
-        // Thiết lập lại góc nhìn của Camera để bạn thấy được toàn cảnh đường chéo kho
-        camera.position.set(7.5, 32, 20);
-        controls.target.set(7.5, 0, 15);
+        // Thiết lập lại góc nhìn Camera để bao quát từ trên cao xuống toàn bộ kho
+        camera.position.set(7.5, 28, 25);
+        controls.target.set(7.5, 0, 10);
     });
 }
