@@ -724,14 +724,14 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - UPDATED WIDTH & COLOR ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - 15x30 AREA ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
     btnLoadMekong.addEventListener('click', () => {
-        document.getElementById('inpL').value = 15.0; // Widened room for the 7m gap
-        document.getElementById('inpW').value = 20.4;
-        document.getElementById('inpH').value = 4.0;
+        document.getElementById('inpL').value = 15.0;
+        document.getElementById('inpW').value = 30.0;
+        document.getElementById('inpH').value = 5.0;
         updateRoom();
 
         let presetGroup = scene.getObjectByName('presetGroup');
@@ -748,7 +748,6 @@ if (btnLoadMekong) {
             const geo = new THREE.BoxGeometry(sizeX, sizeY, sizeZ);
             const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.7 });
             const mesh = new THREE.Mesh(geo, mat);
-            
             const edges = new THREE.EdgesGeometry(geo);
             const lineMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
             const wireframe = new THREE.LineSegments(edges, lineMat);
@@ -762,25 +761,21 @@ if (btnLoadMekong) {
         const lowHeight = 1.5; 
         const highHeight = 3.0; 
 
-        for(let i = 0; i < 14; i++) {
-            const currentZ = 2.5 + i * 1.0; 
+        for(let i = 0; i < 22; i++) {
+            const currentZ = 4.0 + i * 1.0; 
 
-            if (i !== 4 && i !== 9) {
-                createRack(0x1d4ed8, 1.2, currentZ, rackWidth, rackLength, lowHeight); 
-                createRack(0x1d4ed8, 3.8, currentZ, rackWidth, rackLength, lowHeight); 
+            if (i !== 7 && i !== 14) {
+                createRack(0x1d4ed8, 1.5, currentZ, rackWidth, rackLength, lowHeight); 
+                createRack(0x1d4ed8, 4.1, currentZ, rackWidth, rackLength, lowHeight); 
             }
 
-            // Both rows are fully red with a 7-meter gap between X: 6.0 and X: 13.0
             createRack(0xdc2626, 6.0, currentZ, rackWidth, rackLength, highHeight);
             createRack(0xdc2626, 13.0, currentZ, rackWidth, rackLength, highHeight);
         }
 
-        createRack(0x9ca3af, 2.5, 9.0, 0.8, 14.0, 0.5);
-        createRack(0xeab308, 2.0, 18.5, 0.8, 0.8, 0.5); 
-        createRack(0xd1d5db, 3.5, 18.5, 0.8, 0.8, 0.5); 
-        createRack(0xdc2626, 5.0, 18.5, 0.8, 0.8, 0.5); 
+        createRack(0x9ca3af, 2.8, 14.5, 0.8, 22.0, 0.5);
 
-        camera.position.set(7.5, 24, 28);
-        controls.target.set(7.5, 0, 10);
+        camera.position.set(7.5, 30, 35);
+        controls.target.set(7.5, 0, 15);
     });
 }
