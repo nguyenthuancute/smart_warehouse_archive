@@ -724,11 +724,12 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - 15x30 AREA ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - ĐIỀU CHỈNH ĐỘ DÀI VÀ SỐ HỘP ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
     btnLoadMekong.addEventListener('click', () => {
+        // Cập nhật không gian kho 15x30x5
         document.getElementById('inpL').value = 15.0;
         document.getElementById('inpW').value = 30.0;
         document.getElementById('inpH').value = 5.0;
@@ -744,6 +745,7 @@ if (btnLoadMekong) {
             presetGroup.remove(presetGroup.children[0]);
         }
 
+        // Hàm tạo hình hộp với tham số (màu sắc, tọa độ X, tọa độ Z, rông, dài, cao)
         function createRack(color, x, z, sizeX, sizeZ, sizeY) {
             const geo = new THREE.BoxGeometry(sizeX, sizeY, sizeZ);
             const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.7 });
@@ -757,24 +759,36 @@ if (btnLoadMekong) {
         }
 
         const rackWidth = 1.0; 
-        const rackLength = 1.0; 
         const lowHeight = 1.5; 
         const highHeight = 3.0; 
 
-        for(let i = 0; i < 22; i++) {
-            const currentZ = 4.0 + i * 1.0; 
+        // 1. Vẽ dãy hàng thấp (màu xanh): 12 hộp, mỗi hộp dài 1m, có khoảng trống
+        for(let i = 0; i < 14; i++) {
+            // Căn giữa dãy 14m này trong khoảng Z từ 8 đến 22 (tâm là 15)
+            const currentZ = 8.5 + i * 1.0; 
 
-            if (i !== 7 && i !== 14) {
-                createRack(0x1d4ed8, 1.5, currentZ, rackWidth, rackLength, lowHeight); 
-                createRack(0x1d4ed8, 4.1, currentZ, rackWidth, rackLength, lowHeight); 
+            // Bỏ qua vị trí 4 và 9 để tạo 3 cụm, mỗi cụm 4 hộp (tổng 12 hộp)
+            if (i !== 4 && i !== 9) {
+                createRack(0x1d4ed8, 1.5, currentZ, rackWidth, 1.0, lowHeight); 
+                createRack(0x1d4ed8, 4.1, currentZ, rackWidth, 1.0, lowHeight); 
             }
-
-            createRack(0xdc2626, 6.0, currentZ, rackWidth, rackLength, highHeight);
-            createRack(0xdc2626, 13.0, currentZ, rackWidth, rackLength, highHeight);
         }
 
-        createRack(0x9ca3af, 2.8, 14.5, 0.8, 22.0, 0.5);
+        // 2. Vẽ băng chuyền (màu xám): Dài 14m, nằm vừa khớp với độ dài dãy hàng thấp
+        // Tâm điểm theo trục Z là 15.0
+        createRack(0x9ca3af, 2.8, 15.0, 0.8, 14.0, 0.5);
 
+        // 3. Vẽ dãy hàng cao (màu đỏ): 12 hộp liền mạch, mỗi hộp dài 1.5m
+        // Tổng chiều dài = 12 * 1.5 = 18m. Tâm điểm Z nằm ở 15.
+        for(let i = 0; i < 12; i++) {
+            // Tọa độ bắt đầu để căn giữa đoạn thẳng 18m là từ 6.0 đến 24.0
+            const currentZ = 6.75 + i * 1.5; 
+            
+            createRack(0xdc2626, 6.0, currentZ, rackWidth, 1.5, highHeight);
+            createRack(0xdc2626, 13.0, currentZ, rackWidth, 1.5, highHeight);
+        }
+
+        // Thiết lập lại góc nhìn của Camera
         camera.position.set(7.5, 30, 35);
         controls.target.set(7.5, 0, 15);
     });
