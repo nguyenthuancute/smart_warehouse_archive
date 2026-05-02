@@ -724,7 +724,7 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - THÊM 1 Ô DÃY CAO ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - ÉP KỊCH TƯỜNG ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
@@ -761,33 +761,29 @@ if (btnLoadMekong) {
         const lowHeight = 1.5; 
         const highHeight = 3.0; 
 
-        // 1. Vẽ dãy hàng thấp (màu xanh): Ép sát vào dãy cao
+        // 1. Vẽ dãy hàng thấp (màu xanh): Đẩy sát mép tường (Tâm Z bắt đầu từ 0.5 vì hộp dài 1.0)
         for(let i = 0; i < 14; i++) {
-            const currentZ = 2.0 + i * 1.0; 
+            const currentZ = 0.5 + i * 1.0; 
 
             if (i !== 4 && i !== 9) {
-                // Dãy thấp 1
                 createRack(0x1d4ed8, 2.4, currentZ, rackWidth, 1.0, lowHeight); 
-                // Dãy thấp 2 (cách mép dãy cao 1 đúng 0.1)
                 createRack(0x1d4ed8, 6.4, currentZ, rackWidth, 1.0, lowHeight); 
             }
         }
 
-        // 2. Vẽ băng chuyền (màu xám): Căn giữa 2 dãy thấp
-        createRack(0x9ca3af, 4.4, 8.5, 0.8, 14.0, 0.5);
+        // 2. Vẽ băng chuyền (màu xám): Chiều dài 14.0 -> Tâm Z là 7.0 để mép chạm 0
+        createRack(0x9ca3af, 4.4, 7.0, 0.8, 14.0, 0.5);
 
-        // 3. Vẽ dãy hàng cao (màu đỏ): Tăng lên 13 ô (vòng lặp chạy tới 13)
+        // 3. Vẽ dãy hàng cao (màu đỏ): 13 ô. Đẩy sát mép tường (Tâm Z bắt đầu từ 0.6 vì hộp dài 1.2)
         for(let i = 0; i < 13; i++) {
-            const currentZ = 2.1 + i * 1.2; 
+            const currentZ = 0.6 + i * 1.2; 
             
-            // Dãy cao 1
             createRack(0xdc2626, 7.5, currentZ, rackWidth, 1.2, highHeight);
-            // Dãy cao 2
             createRack(0xdc2626, 14.5, currentZ, rackWidth, 1.2, highHeight);
         }
 
-        // Thiết lập lại góc nhìn Camera
-        camera.position.set(7.5, 28, 25);
+        // Thiết lập lại góc nhìn Camera để bao quát
+        camera.position.set(7.5, 28, 22);
         controls.target.set(7.5, 0, 10);
     });
 }
