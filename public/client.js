@@ -724,7 +724,7 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - THÊM HỘP GỖ DÃY CAO ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - KÉO CAO DÃY HÀNG XANH ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
@@ -822,10 +822,10 @@ if (btnLoadMekong) {
         }
 
         const rackWidth = 1.0; 
-        const lowHeight = 1.5; 
+        const lowHeight = 2.8; // Đã kéo cao lên 2.8 (chỉ cách 0.2 so với 3.0)
         const highHeight = 3.0; 
 
-        // 1. Vẽ dãy hàng thấp: Tham số hasBoxes = false (KHÔNG có hộp gỗ)
+        // 1. Vẽ dãy hàng bên trái (màu xanh): Tham số hasBoxes = false
         for(let i = 0; i < 14; i++) {
             const currentZ = 0.5 + i * 1.0; 
 
@@ -838,7 +838,7 @@ if (btnLoadMekong) {
         // 2. Vẽ băng chuyền
         createSolidBox(0x9ca3af, 4.4, 7.0, 0.8, 14.0, 0.5);
 
-        // 3. Vẽ dãy hàng cao: Tham số hasBoxes = true (CÓ hộp gỗ đặt lên)
+        // 3. Vẽ dãy hàng bên phải (màu đỏ): Tham số hasBoxes = true
         for(let i = 0; i < 12; i++) {
             const currentZ = 0.6 + i * 1.2; 
             
