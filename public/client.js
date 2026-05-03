@@ -724,7 +724,7 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - KỆ HÀNG 3 TẦNG CHI TIẾT ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - THÊM HỘP GỖ DÃY CAO ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
@@ -758,15 +758,17 @@ if (btnLoadMekong) {
             presetGroup.add(mesh);
         }
 
-        // Hàm 2: Tạo kệ hàng 3 tầng chi tiết (Khung xanh, mâm cam)
-        function createDetailedRack(x, z, sizeX, sizeZ, sizeY, tiers = 3) {
+        // Hàm 2: Tạo kệ hàng 3 tầng chi tiết (Có tùy chọn thêm hộp gỗ)
+        function createDetailedRack(x, z, sizeX, sizeZ, sizeY, tiers = 3, hasBoxes = false) {
             const rackGroup = new THREE.Group();
             
             const frameMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.6 }); // Xanh lam
             const shelfMat = new THREE.MeshStandardMaterial({ color: 0xff6600, roughness: 0.5 }); // Cam
+            const boxMat = new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }); // Màu gỗ sáng
 
-            const frameThick = 0.08; // Độ dày cột trụ
-            const shelfThick = 0.05; // Độ dày mâm kệ
+            const frameThick = 0.08; 
+            const shelfThick = 0.05; 
+            const tierSpacing = (sizeY * 0.85) / (tiers - 1); // Khoảng cách giữa các tầng
 
             // Tạo 4 cột trụ đứng
             const pillarGeo = new THREE.BoxGeometry(frameThick, sizeY, frameThick);
@@ -776,25 +778,43 @@ if (btnLoadMekong) {
             for (let px of pX) {
                 for (let pz of pZ) {
                     const pillar = new THREE.Mesh(pillarGeo, frameMat);
-                    pillar.position.set(px, sizeY / 2, pz); // Tính từ mặt đất lên
+                    pillar.position.set(px, sizeY / 2, pz); 
                     rackGroup.add(pillar);
                 }
             }
 
             // Tạo các mâm kệ ngang
             const shelfGeo = new THREE.BoxGeometry(sizeX, shelfThick, sizeZ);
-            const edges = new THREE.EdgesGeometry(shelfGeo);
-            const lineMat = new THREE.LineBasicMaterial({ color: 0x552200, linewidth: 1 }); // Viền mâm kệ cho nét
+            const shelfEdges = new THREE.EdgesGeometry(shelfGeo);
+            const shelfLineMat = new THREE.LineBasicMaterial({ color: 0x552200, linewidth: 1 }); 
+
+            // Cấu hình mô hình khối gỗ (chiếm 75% diện tích mâm, cao 65% khoảng trống)
+            const boxHeight = tierSpacing * 0.65;
+            const boxGeo = new THREE.BoxGeometry(sizeX * 0.75, boxHeight, sizeZ * 0.75);
+            const boxEdges = new THREE.EdgesGeometry(boxGeo);
+            const boxLineMat = new THREE.LineBasicMaterial({ color: 0x5c4033, linewidth: 1 }); // Màu viền gỗ đậm
 
             for (let i = 0; i < tiers; i++) {
+                // Thêm mâm kệ
                 const shelf = new THREE.Mesh(shelfGeo, shelfMat);
-                const wireframe = new THREE.LineSegments(edges, lineMat);
+                const wireframe = new THREE.LineSegments(shelfEdges, shelfLineMat);
                 shelf.add(wireframe);
 
-                // Tính toán vị trí Y cho từng tầng (tầng thấp nhất cách đất 15%)
-                const tierY = (sizeY * 0.15) + i * ((sizeY * 0.85) / (tiers - 1));
+                const tierY = (sizeY * 0.15) + i * tierSpacing;
                 shelf.position.set(0, tierY, 0);
                 rackGroup.add(shelf);
+
+                // Thêm hộp gỗ nếu tham số hasBoxes = true
+                if (hasBoxes) {
+                    const boxMesh = new THREE.Mesh(boxGeo, boxMat);
+                    const boxWireframe = new THREE.LineSegments(boxEdges, boxLineMat);
+                    boxMesh.add(boxWireframe);
+                    
+                    // Tính toán để hộp gỗ nằm bám sát ngay phía trên mặt mâm cam
+                    const boxY = tierY + (shelfThick / 2) + (boxHeight / 2);
+                    boxMesh.position.set(0, boxY, 0);
+                    rackGroup.add(boxMesh);
+                }
             }
 
             rackGroup.position.set(x, 0, z);
@@ -805,28 +825,28 @@ if (btnLoadMekong) {
         const lowHeight = 1.5; 
         const highHeight = 3.0; 
 
-        // 1. Vẽ dãy hàng thấp: Thay khối hộp bằng mô hình kệ chi tiết 3 tầng
+        // 1. Vẽ dãy hàng thấp: Tham số hasBoxes = false (KHÔNG có hộp gỗ)
         for(let i = 0; i < 14; i++) {
             const currentZ = 0.5 + i * 1.0; 
 
             if (i !== 4 && i !== 9) {
-                createDetailedRack(2.4, currentZ, rackWidth, 1.0, lowHeight, 3); 
-                createDetailedRack(6.4, currentZ, rackWidth, 1.0, lowHeight, 3); 
+                createDetailedRack(2.4, currentZ, rackWidth, 1.0, lowHeight, 3, false); 
+                createDetailedRack(6.4, currentZ, rackWidth, 1.0, lowHeight, 3, false); 
             }
         }
 
-        // 2. Vẽ băng chuyền (Vẫn giữ dạng khối đặc màu xám)
+        // 2. Vẽ băng chuyền
         createSolidBox(0x9ca3af, 4.4, 7.0, 0.8, 14.0, 0.5);
 
-        // 3. Vẽ dãy hàng cao: Thay khối hộp bằng mô hình kệ chi tiết 3 tầng
+        // 3. Vẽ dãy hàng cao: Tham số hasBoxes = true (CÓ hộp gỗ đặt lên)
         for(let i = 0; i < 12; i++) {
             const currentZ = 0.6 + i * 1.2; 
             
-            createDetailedRack(7.5, currentZ, rackWidth, 1.2, highHeight, 3);
-            createDetailedRack(14.5, currentZ, rackWidth, 1.2, highHeight, 3);
+            createDetailedRack(7.5, currentZ, rackWidth, 1.2, highHeight, 3, true);
+            createDetailedRack(14.5, currentZ, rackWidth, 1.2, highHeight, 3, true);
         }
 
-        // Thiết lập lại góc nhìn Camera để bao quát
+        // Thiết lập lại góc nhìn Camera
         camera.position.set(7.5, 20, 25);
         controls.target.set(7.5, 0, 10);
     });
