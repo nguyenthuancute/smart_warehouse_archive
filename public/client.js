@@ -724,7 +724,7 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - BỎ Ô CUỐI DÃY CAO ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - KỆ HÀNG 3 TẦNG CHI TIẾT ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
@@ -745,7 +745,8 @@ if (btnLoadMekong) {
             presetGroup.remove(presetGroup.children[0]);
         }
 
-        function createRack(color, x, z, sizeX, sizeZ, sizeY) {
+        // Hàm 1: Tạo khối đặc (dùng cho băng chuyền)
+        function createSolidBox(color, x, z, sizeX, sizeZ, sizeY) {
             const geo = new THREE.BoxGeometry(sizeX, sizeY, sizeZ);
             const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.7 });
             const mesh = new THREE.Mesh(geo, mat);
@@ -757,33 +758,76 @@ if (btnLoadMekong) {
             presetGroup.add(mesh);
         }
 
+        // Hàm 2: Tạo kệ hàng 3 tầng chi tiết (Khung xanh, mâm cam)
+        function createDetailedRack(x, z, sizeX, sizeZ, sizeY, tiers = 3) {
+            const rackGroup = new THREE.Group();
+            
+            const frameMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.6 }); // Xanh lam
+            const shelfMat = new THREE.MeshStandardMaterial({ color: 0xff6600, roughness: 0.5 }); // Cam
+
+            const frameThick = 0.08; // Độ dày cột trụ
+            const shelfThick = 0.05; // Độ dày mâm kệ
+
+            // Tạo 4 cột trụ đứng
+            const pillarGeo = new THREE.BoxGeometry(frameThick, sizeY, frameThick);
+            const pX = [sizeX/2 - frameThick/2, -sizeX/2 + frameThick/2];
+            const pZ = [sizeZ/2 - frameThick/2, -sizeZ/2 + frameThick/2];
+            
+            for (let px of pX) {
+                for (let pz of pZ) {
+                    const pillar = new THREE.Mesh(pillarGeo, frameMat);
+                    pillar.position.set(px, sizeY / 2, pz); // Tính từ mặt đất lên
+                    rackGroup.add(pillar);
+                }
+            }
+
+            // Tạo các mâm kệ ngang
+            const shelfGeo = new THREE.BoxGeometry(sizeX, shelfThick, sizeZ);
+            const edges = new THREE.EdgesGeometry(shelfGeo);
+            const lineMat = new THREE.LineBasicMaterial({ color: 0x552200, linewidth: 1 }); // Viền mâm kệ cho nét
+
+            for (let i = 0; i < tiers; i++) {
+                const shelf = new THREE.Mesh(shelfGeo, shelfMat);
+                const wireframe = new THREE.LineSegments(edges, lineMat);
+                shelf.add(wireframe);
+
+                // Tính toán vị trí Y cho từng tầng (tầng thấp nhất cách đất 15%)
+                const tierY = (sizeY * 0.15) + i * ((sizeY * 0.85) / (tiers - 1));
+                shelf.position.set(0, tierY, 0);
+                rackGroup.add(shelf);
+            }
+
+            rackGroup.position.set(x, 0, z);
+            presetGroup.add(rackGroup);
+        }
+
         const rackWidth = 1.0; 
         const lowHeight = 1.5; 
         const highHeight = 3.0; 
 
-        // 1. Vẽ dãy hàng thấp (màu xanh): Vẫn ép sát mép tường (Tâm Z bắt đầu từ 0.5)
+        // 1. Vẽ dãy hàng thấp: Thay khối hộp bằng mô hình kệ chi tiết 3 tầng
         for(let i = 0; i < 14; i++) {
             const currentZ = 0.5 + i * 1.0; 
 
             if (i !== 4 && i !== 9) {
-                createRack(0x1d4ed8, 2.4, currentZ, rackWidth, 1.0, lowHeight); 
-                createRack(0x1d4ed8, 6.4, currentZ, rackWidth, 1.0, lowHeight); 
+                createDetailedRack(2.4, currentZ, rackWidth, 1.0, lowHeight, 3); 
+                createDetailedRack(6.4, currentZ, rackWidth, 1.0, lowHeight, 3); 
             }
         }
 
-        // 2. Vẽ băng chuyền (màu xám): Ép sát tường
-        createRack(0x9ca3af, 4.4, 7.0, 0.8, 14.0, 0.5);
+        // 2. Vẽ băng chuyền (Vẫn giữ dạng khối đặc màu xám)
+        createSolidBox(0x9ca3af, 4.4, 7.0, 0.8, 14.0, 0.5);
 
-        // 3. Vẽ dãy hàng cao (màu đỏ): Giảm xuống còn 12 ô, cắt đi ô cuối cùng
+        // 3. Vẽ dãy hàng cao: Thay khối hộp bằng mô hình kệ chi tiết 3 tầng
         for(let i = 0; i < 12; i++) {
             const currentZ = 0.6 + i * 1.2; 
             
-            createRack(0xdc2626, 7.5, currentZ, rackWidth, 1.2, highHeight);
-            createRack(0xdc2626, 14.5, currentZ, rackWidth, 1.2, highHeight);
+            createDetailedRack(7.5, currentZ, rackWidth, 1.2, highHeight, 3);
+            createDetailedRack(14.5, currentZ, rackWidth, 1.2, highHeight, 3);
         }
 
-        // Thiết lập lại góc nhìn Camera
-        camera.position.set(7.5, 28, 22);
+        // Thiết lập lại góc nhìn Camera để bao quát
+        camera.position.set(7.5, 20, 25);
         controls.target.set(7.5, 0, 10);
     });
 }
