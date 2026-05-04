@@ -724,7 +724,7 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - GOM 4 Ô/CỤM, CÁCH 0.3, VỀ VỊ TRÍ CŨ ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - CĂN GIỮA DÃY THẤP & DÃY CAO ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
@@ -833,27 +833,27 @@ if (btnLoadMekong) {
         const lowHeight = 2.8; 
         const highHeight = 3.0; 
 
-        // 1. VẼ DÃY HÀNG THẤP (XANH): 12 ô.
-        // Gom 2 gian (mỗi gian 2 ô) thành 1 cụm -> 1 cụm = 4 ô (Dài 4.0m)
-        // Tổng 3 cụm. Khoảng cách = 0.3m.
-        // Bắt đầu từ mép tường Z = 0.5m. Tâm cụm 1 = 0.5 + 2.0 = 2.5m.
+        // 1. VẼ DÃY HÀNG THẤP (XANH): 12 ô chia làm 3 cụm (mỗi cụm 4 ô). Khoảng cách 0.3m.
+        // Dãy cao có tâm Z = 7.7m. Tổng chiều dài dãy thấp là 12.6m.
+        // Để căn giữa với dãy cao, dãy thấp sẽ bắt đầu từ Z = 7.7 - (12.6 / 2) = 1.4m.
+        // Tâm cụm 1 (dài 4.0m) sẽ nằm ở 1.4 + 2.0 = 3.4m.
         for(let i = 0; i < 3; i++) {
-            const currentZ = 2.5 + i * 4.3; // Bước nhảy = 4.0 (chiều dài) + 0.3 (khoảng cách) = 4.3m
+            const currentZ = 3.4 + i * 4.3; // Bước nhảy = 4.0m (chiều dài cụm) + 0.3m (khoảng cách) = 4.3m
             
             createDetailedRack(2.4, currentZ, rackWidth, 1.0, 4, lowHeight, 3, false); 
             createDetailedRack(6.4, currentZ, rackWidth, 1.0, 4, lowHeight, 3, false); 
         }
 
         // 2. VẼ BĂNG CHUYỀN (XÁM)
-        // Chiều dài từ Z=0.5 đến Z=13.1m -> Dài tổng 12.6m. Tâm nằm ở Z=6.8m.
-        createSolidBox(0x9ca3af, 4.4, 6.8, 0.8, 12.6, 0.5);
+        // Chiều dài tổng 12.6m. Tâm nằm ở Z=7.7m (trùng với tâm của dãy cao và dãy thấp).
+        createSolidBox(0x9ca3af, 4.4, 7.7, 0.8, 12.6, 0.5);
 
         // 3. VẼ DÃY HÀNG CAO (ĐỎ): 12 ô liền mạch (Dài 12 * 1.2 = 14.4m)
         // Bắt đầu từ mép tường Z = 0.5m -> Tâm dãy nằm ở Z = 7.7m.
         createDetailedRack(7.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true);
         createDetailedRack(14.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true);
 
-        // Thiết lập lại góc nhìn Camera về phía đầu kho
+        // Thiết lập lại góc nhìn Camera để thấy rõ sự cân đối giữa các dãy
         camera.position.set(7.5, 25, 25);
         controls.target.set(7.5, 0, 10);
     });
