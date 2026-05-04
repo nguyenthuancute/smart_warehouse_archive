@@ -724,7 +724,7 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - CHUẨN HÓA GIAN 2 Ô & KHOẢNG CÁCH 0.2 ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - FIX LỖI, CĂN GIỮA KHO & KHOẢNG CÁCH 0.3 ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
@@ -758,7 +758,7 @@ if (btnLoadMekong) {
             presetGroup.add(mesh);
         }
 
-        // Hàm 2: Tạo cụm kệ hàng (Gom thành gian, cứ 2 ô mới nhô khung lên)
+        // Hàm 2: Tạo cụm kệ hàng (Đã fix lỗi tham số và tối ưu cột)
         function createDetailedRack(x, z, sizeX, bayLength, bays, sizeY, tiers = 3, hasBoxes = false) {
             const rackGroup = new THREE.Group();
             
@@ -770,16 +770,16 @@ if (btnLoadMekong) {
             const shelfThick = 0.05; 
             
             const bottomTierY = sizeY * 0.15; 
-            const topTierY = sizeY * 0.85;    // Mâm trên cùng ở 85% cột
+            const topTierY = sizeY * 0.85; 
             const tierSpacing = (topTierY - bottomTierY) / (tiers - 1); 
             
             const totalZ = bays * bayLength;
 
-            // 1. Tạo các cột trụ đứng (Chỉ cột chẵn (0, 2, 4...) mới nhô lên)
+            // 1. Tạo các cột trụ đứng (Cột ở 2 đầu gian nhô lên, cột ở giữa thụt xuống)
             for (let j = 0; j <= bays; j++) {
-                // Nếu là cột ở 2 đầu gian (ví dụ gian 2 ô thì cột 0 và 2 nhô lên, cột 1 ở giữa thụt xuống)
-                const isProtruding = (j % 2 === 0); 
-                const pH = isProtruding ? sizeY : topTierY; 
+                // Chỉ cột đầu tiên (0) và cột cuối cùng (bays) nhô cao lên
+                const isProtruding = (j === 0 || j === bays); 
+                const pH = isProtruding ? sizeY : topTierY + shelfThick / 2; 
                 
                 const pillarGeo = new THREE.BoxGeometry(frameThick, pH, frameThick);
                 const pZ = -totalZ/2 + j * bayLength;
@@ -834,33 +834,36 @@ if (btnLoadMekong) {
         const lowHeight = 2.8; 
         const highHeight = 3.0; 
 
-        // 1. VẼ DÃY HÀNG THẤP (XANH): 12 ô chia làm 6 gian (mỗi gian 2 ô). Cách nhau 0.2m.
-        // Chiều dài mỗi gian = 2 ô * 1.0m = 2.0m. Bước nhảy = 2.0 + 0.2 = 2.2m.
+        // TÍNH TOÁN CĂN GIỮA CHO DÃY THẤP
+        // Gồm 6 gian (mỗi gian 2 ô). Chiều dài 1 gian = 2.0m. Khoảng cách = 0.3m.
+        // Tổng chiều dài = (6 * 2.0) + (5 * 0.3) = 13.5m.
+        // Tâm kho là Z = 15.0 -> Dãy bắt đầu từ Z = 15 - 13.5/2 = 8.25m.
+        // Tâm gian đầu tiên = 8.25 + 1.0 = 9.25m.
         for(let i = 0; i < 6; i++) {
-            // Gian đầu tiên bắt đầu tâm ở Z = 1.0
-            const currentZ = 1.0 + i * 2.2; 
+            const currentZ = 9.25 + i * 2.3; // Bước nhảy = 2.0 + 0.3 = 2.3m
 
-            // Tham số: x, z, sizeX, bayLength(1.0), bays(2), sizeY, tiers, hasBoxes
+            // Chú ý: Đã fix lỗi truyền đủ 8 tham số cho hàm createDetailedRack
             createDetailedRack(2.4, currentZ, rackWidth, 1.0, 2, lowHeight, 3, false); 
-            createDetailedRack(6.4, currentZ, rackWidth, 1.0, lowHeight, 3, false); 
+            createDetailedRack(6.4, currentZ, rackWidth, 1.0, 2, lowHeight, 3, false); 
         }
 
-        // 2. VẼ BĂNG CHUYỀN (XÁM)
-        // Chiều dài thực tế của dãy thấp là từ Z=0 đến Z=13.0 -> Băng chuyền dài 13m, tâm 6.5
-        createSolidBox(0x9ca3af, 4.4, 6.5, 0.8, 13.0, 0.5);
+        // TÍNH TOÁN BĂNG CHUYỀN
+        // Dài đúng bằng tổng dãy thấp là 13.5m, nằm căn giữa ngay mốc Z = 15.0
+        createSolidBox(0x9ca3af, 4.4, 15.0, 0.8, 13.5, 0.5);
 
-        // 3. VẼ DÃY HÀNG CAO (ĐỎ): 12 ô chia làm 6 gian (mỗi gian 2 ô). Xếp liền mạch không có khoảng cách.
-        // Chiều dài mỗi gian = 2 ô * 1.2m = 2.4m. Bước nhảy = 2.4m.
+        // TÍNH TOÁN CĂN GIỮA CHO DÃY CAO
+        // Gồm 6 gian (mỗi gian 2 ô dài 1.2m) nối liền mạch = 12 ô * 1.2 = 14.4m.
+        // Tâm kho là Z = 15.0 -> Dãy bắt đầu từ Z = 15 - 14.4/2 = 7.8m.
+        // Tâm gian đầu tiên = 7.8 + 1.2 = 9.0m.
         for(let i = 0; i < 6; i++) {
-            // Gian đầu tiên bắt đầu tâm ở Z = 1.2
-            const currentZ = 1.2 + i * 2.4; 
+            const currentZ = 9.0 + i * 2.4; // Bước nhảy bằng đúng chiều dài gian (2.4m), không có khoảng cách
             
             createDetailedRack(7.5, currentZ, rackWidth, 1.2, 2, highHeight, 3, true);
             createDetailedRack(14.5, currentZ, rackWidth, 1.2, 2, highHeight, 3, true);
         }
 
-        // Thiết lập lại góc nhìn Camera
-        camera.position.set(7.5, 20, 25);
-        controls.target.set(7.5, 0, 10);
+        // Thiết lập lại góc nhìn Camera để bao quát hệ thống ở giữa kho
+        camera.position.set(7.5, 25, 32);
+        controls.target.set(7.5, 0, 15);
     });
 }
