@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Indoor Positioning Dashboard</title>
+    <title>Smart Warehouse — Quản lý kho</title>
     <link rel="stylesheet" href="style.css">
     <script type="importmap">
         { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
@@ -13,9 +12,23 @@
 <body>
     <div id="app-container">
         <header id="app-header">
-            <h1>INDOOR POSITIONING DASHBOARD</h1>
+            <h1>🏭 SMART WAREHOUSE</h1>
             <div class="header-controls">
-                 <button id="btn-settings" class="btn-mode">Cài đặt</button>
+                <!-- Stats bar -->
+                <div id="stats-bar">
+                    <span class="stat-item" id="stat-products">— SKU</span>
+                    <span class="stat-item stat-warn" id="stat-lowstock" style="display:none">⚠ — sắp hết</span>
+                    <span class="stat-item" id="stat-value">₫ —</span>
+                </div>
+                <!-- Nav tabs -->
+                <div id="main-tabs">
+                    <button class="tab-btn active" data-tab="tab-3d">3D Kho</button>
+                    <button class="tab-btn" data-tab="tab-sku">📦 Hàng hóa</button>
+                    <button class="tab-btn" data-tab="tab-receipt">📥 Nhập</button>
+                    <button class="tab-btn" data-tab="tab-delivery">📤 Xuất</button>
+                    <button class="tab-btn" data-tab="tab-audit">📋 Log</button>
+                </div>
+                <button id="btn-settings" class="btn-mode">Cài đặt</button>
                 <div id="mode-switcher">
                     <button class="btn-mode active" id="btn-mode-3d">3D</button>
                     <button class="btn-mode" id="btn-mode-2d">2D</button>
@@ -23,88 +36,312 @@
             </div>
         </header>
 
+        <!-- LOW STOCK ALERT BANNER -->
+        <div id="low-stock-banner" style="display:none">
+            <span id="low-stock-msg"></span>
+            <button onclick="document.getElementById('low-stock-banner').style.display='none'">✕</button>
+        </div>
+
         <main id="viewport">
-            <div id="floating-panel">
-                <div class="panel-header">
-                    <h3>Bảng điều khiển</h3>
-                    <button id="btn-close-panel">✕</button>
-                </div>
-                <div class="panel-content">
-                    <div class="panel-section" id="presets-section">
-                        <h2 class="collapsible">Kho có sẵn</h2>
-                        <div class="collapsible-content">
-                            <div class="button-group" style="padding: 10px 0;">
-                                <button id="btn-load-mekong" class="btn-secondary" style="width: 100%;">Kho tiểu vùng sông Mê Kông</button>
-                            </div>
-                        </div>
+            <!-- ══ TAB: 3D VIEWPORT ══ -->
+            <div id="tab-3d" class="tab-content active">
+                <div id="floating-panel">
+                    <div class="panel-header">
+                        <h3>Bảng điều khiển</h3>
+                        <button id="btn-close-panel">✕</button>
                     </div>
-                    <div class="panel-section" id="config-section">
-                        <h2 class="collapsible">Cấu hình Kho</h2>
-                        <div class="collapsible-content">
-                            <div class="form-group">
-                                <label>Kích thước (D-R-C):</label>
-                                <div class="input-group">
-                                    <input type="number" id="inpL" placeholder="X">
-                                    <input type="number" id="inpW" placeholder="Y">
-                                    <input type="number" id="inpH" placeholder="Z">
+                    <div class="panel-content">
+                        <div class="panel-section" id="preset-section">
+                            <h2 class="collapsible">🏭 Kho có sẵn</h2>
+                            <div class="collapsible-content">
+                                <div class="preset-list">
+                                    <div class="preset-item">
+                                        <div class="preset-info">
+                                            <span class="preset-name">Kho Tiểu vùng sông Mêkong</span>
+                                            <span class="preset-desc">Layout 4 dãy kệ · 72×50m</span>
+                                        </div>
+                                        <button class="btn-load-preset" data-preset="mekong">Tải</button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="panel-section" id="anchors-section">
-                        <h2 class="collapsible">Quản lý Anchor</h2>
-                        <div class="collapsible-content">
-                            <div id="anchor-list"></div>
-                            <div class="button-group">
-                                <button id="btn-add-anchor" class="btn-secondary">Thêm</button>
+                        <div class="panel-section" id="config-section">
+                            <h2 class="collapsible">Cấu hình Kho</h2>
+                            <div class="collapsible-content">
+                                <div class="form-group">
+                                    <label>Kích thước (D-R-C):</label>
+                                    <div class="input-group">
+                                        <input type="number" id="inpL" placeholder="X">
+                                        <input type="number" id="inpW" placeholder="Y">
+                                        <input type="number" id="inpH" placeholder="Z">
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="panel-section" id="objects-section">
-                        <h2 class="collapsible">Vật thể</h2>
-                        <div class="collapsible-content">
-                            <div id="object-list"></div>
-                             <div class="button-group">
-                                <button class="btn-secondary" id="btn-add-object">Thêm</button>
+                        <div class="panel-section" id="anchors-section">
+                            <h2 class="collapsible">Quản lý Anchor</h2>
+                            <div class="collapsible-content">
+                                <div id="anchor-list"></div>
+                                <div class="button-group"><button id="btn-add-anchor" class="btn-secondary">Thêm</button></div>
                             </div>
                         </div>
-                    </div>
-
-                     <div class="panel-section" id="tags-section">
-                        <h2 class="collapsible active">Tags Real-time <button id="btn-record-log" class="btn-secondary">Record</button></h2>
-                        <div class="collapsible-content" style="max-height: fit-content;">
-                            <div class="table-container">
-                                <table id="tag-table">
-                                    <thead><tr><th>ID</th><th>X</th><th>Y</th><th>Z</th><th>+/-</th></tr></thead>
-                                    <tbody id="tag-table-body"></tbody>
-                                </table>
+                        <div class="panel-section" id="objects-section">
+                            <h2 class="collapsible">Vật thể</h2>
+                            <div class="collapsible-content">
+                                <div id="object-list"></div>
+                                <div class="button-group"><button class="btn-secondary" id="btn-add-object">Thêm</button></div>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="panel-section" id="tag-history-section">
-                        <h2 class="collapsible">Tag History</h2>
-                        <div class="collapsible-content">
-                            <ul id="log-file-list"></ul>
+                        <div class="panel-section" id="tags-section">
+                            <h2 class="collapsible active">Tags Real-time <button id="btn-record-log" class="btn-secondary">Record</button></h2>
+                            <div class="collapsible-content" style="max-height:fit-content">
+                                <div class="table-container">
+                                    <table id="tag-table">
+                                        <thead><tr><th>ID</th><th>X</th><th>Y</th><th>Z</th><th>+/-</th></tr></thead>
+                                        <tbody id="tag-table-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="panel-section" id="tag-history-section">
+                            <h2 class="collapsible">Tag History</h2>
+                            <div class="collapsible-content"><ul id="log-file-list"></ul></div>
                         </div>
                     </div>
                 </div>
+                <div id="scene-container"></div>
+                <div id="map-2d-container"><canvas id="main-2d-canvas"></canvas></div>
+                <div id="axis-container"></div>
+                <ul id="context-menu" class="context-menu">
+                    <li id="ctx-duplicate">Duplicate</li>
+                    <li id="ctx-delete">Delete</li>
+                </ul>
             </div>
 
-            <div id="scene-container"></div>
-            <div id="map-2d-container"><canvas id="main-2d-canvas"></canvas></div>
-            <div id="axis-container"></div>
+            <!-- ══ TAB: QUẢN LÝ SKU ══ -->
+            <div id="tab-sku" class="tab-content mgmt-tab">
+                <div class="mgmt-header">
+                    <div>
+                        <h2>📦 Danh mục hàng hóa</h2>
+                        <p>Quản lý toàn bộ mã SKU trong kho</p>
+                    </div>
+                    <button class="btn-primary" id="btn-open-add-product">+ Thêm hàng hóa</button>
+                </div>
 
-            <ul id="context-menu" class="context-menu">
-                <li id="ctx-duplicate">Duplicate</li>
-                <li id="ctx-delete">Delete</li>
-            </ul>
+                <!-- Search -->
+                <div class="search-row">
+                    <input type="text" id="sku-search" placeholder="🔍  Tìm theo tên, mã SKU, vị trí...">
+                    <select id="sku-filter">
+                        <option value="all">Tất cả</option>
+                        <option value="low">⚠ Sắp hết hàng</option>
+                        <option value="ok">✓ Đủ hàng</option>
+                    </select>
+                </div>
+
+                <div class="table-wrapper">
+                    <table class="mgmt-table" id="sku-table">
+                        <thead>
+                            <tr>
+                                <th>Mã SKU</th>
+                                <th>Tên hàng hóa</th>
+                                <th>ĐVT</th>
+                                <th>Tồn kho</th>
+                                <th>Tồn tối thiểu</th>
+                                <th>Vị trí kho</th>
+                                <th>Đơn giá</th>
+                                <th>Giá trị</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="sku-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ══ TAB: PHIẾU NHẬP ══ -->
+            <div id="tab-receipt" class="tab-content mgmt-tab">
+                <div class="mgmt-header">
+                    <div>
+                        <h2>📥 Phiếu nhập kho</h2>
+                        <p>Lịch sử nhập hàng và tạo phiếu mới</p>
+                    </div>
+                    <button class="btn-primary" id="btn-open-receipt-form">+ Tạo phiếu nhập</button>
+                </div>
+                <div class="table-wrapper">
+                    <table class="mgmt-table" id="receipt-table">
+                        <thead>
+                            <tr><th>Mã phiếu</th><th>Nhà cung cấp</th><th>Số mặt hàng</th><th>Tổng tiền</th><th>Ngày nhập</th><th>Ghi chú</th></tr>
+                        </thead>
+                        <tbody id="receipt-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ══ TAB: PHIẾU XUẤT ══ -->
+            <div id="tab-delivery" class="tab-content mgmt-tab">
+                <div class="mgmt-header">
+                    <div>
+                        <h2>📤 Phiếu xuất kho</h2>
+                        <p>Lịch sử xuất hàng và tạo phiếu mới</p>
+                    </div>
+                    <button class="btn-primary" id="btn-open-delivery-form">+ Tạo phiếu xuất</button>
+                </div>
+                <div class="table-wrapper">
+                    <table class="mgmt-table" id="delivery-table">
+                        <thead>
+                            <tr><th>Mã phiếu</th><th>Khách hàng</th><th>Số mặt hàng</th><th>Tổng tiền</th><th>Ngày xuất</th><th>Ghi chú</th></tr>
+                        </thead>
+                        <tbody id="delivery-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ══ TAB: AUDIT LOG ══ -->
+            <div id="tab-audit" class="tab-content mgmt-tab">
+                <div class="mgmt-header">
+                    <div>
+                        <h2>📋 Nhật ký hoạt động</h2>
+                        <p>Ghi lại mọi thao tác trong hệ thống</p>
+                    </div>
+                    <button class="btn-secondary" id="btn-export-audit">⬇ Xuất CSV</button>
+                </div>
+                <div class="table-wrapper">
+                    <table class="mgmt-table" id="audit-table">
+                        <thead>
+                            <tr><th>Thời gian</th><th>Người dùng</th><th>Thao tác</th><th>Đối tượng</th><th>Chi tiết</th></tr>
+                        </thead>
+                        <tbody id="audit-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
         </main>
+    </div>
+
+    <!-- ══ MODAL: THÊM/SỬA SẢN PHẨM ══ -->
+    <div class="modal-overlay" id="modal-product" style="display:none">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modal-product-title">Thêm hàng hóa</h3>
+                <button class="modal-close" data-close="modal-product">✕</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="prod-id">
+                <div class="form-row">
+                    <div class="form-col">
+                        <label>Tên hàng hóa *</label>
+                        <input type="text" id="prod-name" placeholder="VD: Thùng carton 30x40">
+                    </div>
+                    <div class="form-col">
+                        <label>Mã SKU *</label>
+                        <input type="text" id="prod-sku" placeholder="VD: TC-3040">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-col">
+                        <label>Đơn vị tính</label>
+                        <input type="text" id="prod-unit" placeholder="cái / thùng / kg...">
+                    </div>
+                    <div class="form-col">
+                        <label>Vị trí kho</label>
+                        <input type="text" id="prod-location" placeholder="VD: D1-K3-T2-O5">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-col">
+                        <label>Tồn kho ban đầu</label>
+                        <input type="number" id="prod-qty" placeholder="0" min="0">
+                    </div>
+                    <div class="form-col">
+                        <label>Tồn tối thiểu (cảnh báo)</label>
+                        <input type="number" id="prod-minqty" placeholder="0" min="0">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-col">
+                        <label>Đơn giá (₫)</label>
+                        <input type="number" id="prod-price" placeholder="0" min="0">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" data-close="modal-product">Hủy</button>
+                <button class="btn-primary" id="btn-save-product">Lưu hàng hóa</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ MODAL: PHIẾU NHẬP ══ -->
+    <div class="modal-overlay" id="modal-receipt" style="display:none">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h3>Tạo phiếu nhập kho</h3>
+                <button class="modal-close" data-close="modal-receipt">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-col">
+                        <label>Nhà cung cấp</label>
+                        <input type="text" id="rec-supplier" placeholder="Tên công ty / cá nhân">
+                    </div>
+                    <div class="form-col">
+                        <label>Ghi chú</label>
+                        <input type="text" id="rec-note" placeholder="Ghi chú thêm">
+                    </div>
+                </div>
+                <div class="items-header">
+                    <span>Danh sách hàng hóa</span>
+                    <button class="btn-secondary sm" id="btn-add-rec-item">+ Thêm dòng</button>
+                </div>
+                <div id="rec-items"></div>
+                <div class="receipt-total">Tổng: <strong id="rec-total">₫0</strong></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" data-close="modal-receipt">Hủy</button>
+                <button class="btn-primary" id="btn-save-receipt">✓ Xác nhận nhập kho</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ MODAL: PHIẾU XUẤT ══ -->
+    <div class="modal-overlay" id="modal-delivery" style="display:none">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h3>Tạo phiếu xuất kho</h3>
+                <button class="modal-close" data-close="modal-delivery">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-col">
+                        <label>Khách hàng</label>
+                        <input type="text" id="del-customer" placeholder="Tên khách hàng">
+                    </div>
+                    <div class="form-col">
+                        <label>Ghi chú</label>
+                        <input type="text" id="del-note" placeholder="Ghi chú thêm">
+                    </div>
+                </div>
+                <div class="items-header">
+                    <span>Danh sách hàng hóa xuất</span>
+                    <button class="btn-secondary sm" id="btn-add-del-item">+ Thêm dòng</button>
+                </div>
+                <div id="del-items"></div>
+                <div class="receipt-total">Tổng: <strong id="del-total">₫0</strong></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" data-close="modal-delivery">Hủy</button>
+                <button class="btn-primary" id="btn-save-delivery">✓ Xác nhận xuất kho</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading overlay -->
+    <div id="preset-loading">
+        <div class="preset-spinner"></div>
+        <span id="preset-loading-text">Đang tải layout kho...</span>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script type="module" src="client.js"></script>
+    <script src="warehouse.js"></script>
 </body>
 </html>
