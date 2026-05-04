@@ -724,7 +724,7 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - KÉO CAO NGỌN CỘT THÉP ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - THÊM CỬA 2.5M ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
@@ -758,7 +758,7 @@ if (btnLoadMekong) {
             presetGroup.add(mesh);
         }
 
-        // Hàm 2: Tạo cụm kệ hàng (Kéo cao ngọn cột)
+        // Hàm 2: Tạo cụm kệ hàng 
         function createDetailedRack(x, z, sizeX, bayLength, bays, sizeY, tiers = 3, hasBoxes = false) {
             const rackGroup = new THREE.Group();
             
@@ -774,13 +774,10 @@ if (btnLoadMekong) {
             const tierSpacing = (topTierY - bottomTierY) / (tiers - 1); 
             
             const totalZ = bays * bayLength;
-            const extraProtrusion = 0.5; // Kéo phần cột nhô lên thêm 0.5m nữa cho giống ảnh thật
 
-            // 1. Tạo các cột trụ đứng (Cột nhô cao khi index chẵn: 0, 2, 4...)
             for (let j = 0; j <= bays; j++) {
                 const isProtruding = (j % 2 === 0); 
-                // Nếu là cột chính -> chiều cao = sizeY + 0.5m. Nếu cột phụ -> chỉ cao bằng mâm trên cùng.
-                const pH = isProtruding ? sizeY + extraProtrusion : topTierY + shelfThick / 2; 
+                const pH = isProtruding ? sizeY : topTierY + shelfThick / 2; 
                 
                 const pillarGeo = new THREE.BoxGeometry(frameThick, pH, frameThick);
                 const pZ = -totalZ/2 + j * bayLength;
@@ -793,7 +790,6 @@ if (btnLoadMekong) {
                 }
             }
 
-            // 2. Tạo các mâm kệ ngang & hộp gỗ
             const shelfGeo = new THREE.BoxGeometry(sizeX, shelfThick, bayLength);
             const shelfEdges = new THREE.EdgesGeometry(shelfGeo);
             const shelfLineMat = new THREE.LineBasicMaterial({ color: 0x552200, linewidth: 1 }); 
@@ -835,9 +831,9 @@ if (btnLoadMekong) {
         const lowHeight = 2.8; 
         const highHeight = 3.0; 
 
-        // 1. VẼ DÃY HÀNG THẤP (XANH): 12 ô chia làm 3 cụm (mỗi cụm 4 ô). Khoảng cách 0.3m.
+        // 1. VẼ DÃY HÀNG THẤP (XANH)
         for(let i = 0; i < 3; i++) {
-            const currentZ = 3.4 + i * 4.3; // Bước nhảy = 4.0m (chiều dài cụm) + 0.3m (khoảng cách) = 4.3m
+            const currentZ = 3.4 + i * 4.3; 
             
             createDetailedRack(2.4, currentZ, rackWidth, 1.0, 4, lowHeight, 3, false); 
             createDetailedRack(6.4, currentZ, rackWidth, 1.0, 4, lowHeight, 3, false); 
@@ -846,12 +842,30 @@ if (btnLoadMekong) {
         // 2. VẼ BĂNG CHUYỀN (XÁM)
         createSolidBox(0x9ca3af, 4.4, 7.7, 0.8, 12.6, 0.5);
 
-        // 3. VẼ DÃY HÀNG CAO (ĐỎ): 12 ô liền mạch (Dài 12 * 1.2 = 14.4m)
+        // 3. VẼ DÃY HÀNG CAO (ĐỎ)
         createDetailedRack(7.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true);
         createDetailedRack(14.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true);
 
-        // Thiết lập lại góc nhìn Camera
-        camera.position.set(7.5, 25, 25);
-        controls.target.set(7.5, 0, 10);
+        // 4. VẼ CỬA RA VÀO (GÓC DƯỚI BÊN TRÁI)
+        const doorWidth = 2.0; // Rộng 2m
+        const doorHeight = 2.5; // Cao 2.5m
+        const doorDepth = 0.1; // Độ mỏng của cửa
+        const doorGeo = new THREE.BoxGeometry(doorWidth, doorHeight, doorDepth);
+        const doorMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.8 }); // Màu nâu gỗ
+        const doorMesh = new THREE.Mesh(doorGeo, doorMat);
+        
+        // Viền đen cho rõ nét cửa
+        const doorEdges = new THREE.EdgesGeometry(doorGeo);
+        const doorLineMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+        const doorWireframe = new THREE.LineSegments(doorEdges, doorLineMat);
+        doorMesh.add(doorWireframe);
+        
+        // Đặt ở vị trí sát tường dưới (Z = 29.95 để không trùng mặt tường 30), lệch sang trái (X = 1.5)
+        doorMesh.position.set(1.5, doorHeight / 2, 29.95);
+        presetGroup.add(doorMesh);
+
+        // Thiết lập lại góc nhìn Camera: Lùi ra xa tới Z=38 để quan sát được cửa ở mốc Z=30
+        camera.position.set(7.5, 30, 38);
+        controls.target.set(7.5, 0, 15);
     });
 }
