@@ -724,7 +724,7 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - THÊM MÁI CHỮ A VÀ ĐÈN TRẦN ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - 12 ĐÈN VÀ DÂY NGẮN HƠN ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
@@ -822,14 +822,14 @@ if (btnLoadMekong) {
 
             // Chao đèn (Cone)
             const shadeGeo = new THREE.ConeGeometry(0.25, 0.3, 16);
-            const shadeMat = new THREE.MeshStandardMaterial({ color: 0x71717a, roughness: 0.4 }); // Xám kim loại
+            const shadeMat = new THREE.MeshStandardMaterial({ color: 0x71717a, roughness: 0.4 }); 
             const shade = new THREE.Mesh(shadeGeo, shadeMat);
             shade.position.set(0, endY, 0);
             lightGroup.add(shade);
 
             // Bóng đèn phát sáng (Sphere)
             const bulbGeo = new THREE.SphereGeometry(0.12, 16, 16);
-            const bulbMat = new THREE.MeshBasicMaterial({ color: 0xfffbeb }); // Vàng nhạt sáng
+            const bulbMat = new THREE.MeshBasicMaterial({ color: 0xfffbeb }); 
             const bulb = new THREE.Mesh(bulbGeo, bulbMat);
             bulb.position.set(0, endY - 0.1, 0);
             lightGroup.add(bulb);
@@ -855,7 +855,6 @@ if (btnLoadMekong) {
 
         // 2. Hệ thống cửa
         const lineMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
-        // Cửa đôi
         const wingGeo = new THREE.BoxGeometry(1.0, 2.5, 0.1);
         const wingMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.8 });
         const wingEdges = new THREE.EdgesGeometry(wingGeo);
@@ -863,7 +862,7 @@ if (btnLoadMekong) {
         const rightWing = new THREE.Mesh(wingGeo, wingMat); rightWing.add(new THREE.LineSegments(wingEdges, lineMat));
         leftWing.position.set(1.0, 1.25, 29.95); presetGroup.add(leftWing);
         rightWing.position.set(2.0, 1.25, 29.95); presetGroup.add(rightWing);
-        // Cửa cuốn
+
         const rollGeo = new THREE.BoxGeometry(3.5, 3.5, 0.1);
         const rollMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.5 });
         const rollEdges = new THREE.EdgesGeometry(rollGeo);
@@ -872,52 +871,42 @@ if (btnLoadMekong) {
         rollDoor1.position.set(7.5, 1.75, 29.95); presetGroup.add(rollDoor1);
         rollDoor2.position.set(12.0, 1.75, 29.95); presetGroup.add(rollDoor2);
 
-        // --- 3. DỰNG MÁI NHÀ CHỮ A (MÁI BÁN TRONG SUỐT) ---
-        const roofYBase = 5.0; // Bắt đầu từ mép tường cao 5m
-        const roofPeak = 2.5;  // Mái nhô cao thêm 2.5m
-        const halfW = 7.5;     // Một nửa chiều rộng kho
-        const slantLen = Math.sqrt(halfW * halfW + roofPeak * roofPeak); // Đường chéo mái
+        // 3. DỰNG MÁI NHÀ CHỮ A
+        const roofYBase = 5.0; 
+        const roofPeak = 2.5;  
+        const halfW = 7.5;     
+        const slantLen = Math.sqrt(halfW * halfW + roofPeak * roofPeak); 
         const roofAngle = Math.atan2(roofPeak, halfW);
 
-        // Vật liệu mái: Độ mờ 30% để nhìn xuyên thấu vào trong
         const roofMat = new THREE.MeshStandardMaterial({ 
-            color: 0xe5e7eb, 
-            roughness: 0.2, 
-            transparent: true, 
-            opacity: 0.3, 
-            side: THREE.DoubleSide 
+            color: 0xe5e7eb, roughness: 0.2, transparent: true, opacity: 0.3, side: THREE.DoubleSide 
         });
-        // Thiết kế khung giằng mái (chia 8 đoạn dọc)
         const roofGeo = new THREE.BoxGeometry(slantLen, 0.05, 30.0, 1, 1, 8); 
         const roofEdges = new THREE.EdgesGeometry(roofGeo);
-        const trussMat = new THREE.LineBasicMaterial({ color: 0x374151, linewidth: 2 }); // Khung thép tối màu
+        const trussMat = new THREE.LineBasicMaterial({ color: 0x374151, linewidth: 2 }); 
 
-        // Mái bên trái
         const leftRoof = new THREE.Mesh(roofGeo, roofMat);
         leftRoof.add(new THREE.LineSegments(roofEdges, trussMat));
         leftRoof.position.set(halfW / 2, roofYBase + roofPeak / 2, 15.0);
         leftRoof.rotation.z = roofAngle;
         presetGroup.add(leftRoof);
 
-        // Mái bên phải
         const rightRoof = new THREE.Mesh(roofGeo, roofMat);
         rightRoof.add(new THREE.LineSegments(roofEdges, trussMat));
         rightRoof.position.set(15.0 - halfW / 2, roofYBase + roofPeak / 2, 15.0);
         rightRoof.rotation.z = -roofAngle;
         presetGroup.add(rightRoof);
 
-        // --- 4. RẢI HỆ THỐNG ĐÈN TRẦN ---
-        // 3 hàng dọc (lối đi trái, lối đi giữa, lối đi phải), treo cách nhau mỗi 5m theo trục Z
-        for(let z = 2.5; z <= 27.5; z += 5.0) {
-            // Hàng trái (Bắt đầu từ nóc mái trái cao 6.25m, thả xuống 4.2m)
-            createHangingLight(3.75, z, 6.25, 4.2);
-            // Hàng giữa (Bắt đỉnh nóc cao 7.5m, thả xuống 4.2m)
-            createHangingLight(7.5, z, 7.5, 4.2);
-            // Hàng phải (Nóc mái phải cao 6.25m, thả xuống 4.2m)
-            createHangingLight(11.25, z, 6.25, 4.2);
+        // --- 4. RẢI HỆ THỐNG ĐÈN TRẦN (Đã giảm còn 12 đèn và kéo dây ngắn lại) ---
+        // Vòng lặp chỉ chạy 4 lần (Z = 3.75, 11.25, 18.75, 26.25). Tổng: 4 mốc x 3 hàng = 12 đèn
+        for(let z = 3.75; z <= 27.0; z += 7.5) {
+            // Nâng cao độ chao đèn (endY) từ 4.2 lên 5.2 để dây ngắn hơn 1m
+            createHangingLight(3.75, z, 6.25, 5.2);
+            createHangingLight(7.5, z, 7.5, 5.2);
+            createHangingLight(11.25, z, 6.25, 5.2);
         }
 
-        // Chỉnh góc Camera: Nhìn bao quát từ trên xuống chéo góc, xuyên qua mái mờ
+        // Chỉnh góc Camera
         camera.position.set(20, 20, 40);
         controls.target.set(7.5, 2.5, 15);
     });
