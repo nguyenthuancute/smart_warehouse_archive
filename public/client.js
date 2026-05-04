@@ -724,7 +724,7 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - FIX LỖI, CĂN GIỮA KHO & KHOẢNG CÁCH 0.3 ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - GOM 4 Ô/CỤM, CÁCH 0.3, VỀ VỊ TRÍ CŨ ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
@@ -758,7 +758,7 @@ if (btnLoadMekong) {
             presetGroup.add(mesh);
         }
 
-        // Hàm 2: Tạo cụm kệ hàng (Đã fix lỗi tham số và tối ưu cột)
+        // Hàm 2: Tạo cụm kệ hàng (Cứ 2 ô thì cột nhô cao lên)
         function createDetailedRack(x, z, sizeX, bayLength, bays, sizeY, tiers = 3, hasBoxes = false) {
             const rackGroup = new THREE.Group();
             
@@ -775,10 +775,9 @@ if (btnLoadMekong) {
             
             const totalZ = bays * bayLength;
 
-            // 1. Tạo các cột trụ đứng (Cột ở 2 đầu gian nhô lên, cột ở giữa thụt xuống)
+            // 1. Tạo các cột trụ đứng (Cột nhô cao khi index chẵn: 0, 2, 4...)
             for (let j = 0; j <= bays; j++) {
-                // Chỉ cột đầu tiên (0) và cột cuối cùng (bays) nhô cao lên
-                const isProtruding = (j === 0 || j === bays); 
+                const isProtruding = (j % 2 === 0); 
                 const pH = isProtruding ? sizeY : topTierY + shelfThick / 2; 
                 
                 const pillarGeo = new THREE.BoxGeometry(frameThick, pH, frameThick);
@@ -834,36 +833,28 @@ if (btnLoadMekong) {
         const lowHeight = 2.8; 
         const highHeight = 3.0; 
 
-        // TÍNH TOÁN CĂN GIỮA CHO DÃY THẤP
-        // Gồm 6 gian (mỗi gian 2 ô). Chiều dài 1 gian = 2.0m. Khoảng cách = 0.3m.
-        // Tổng chiều dài = (6 * 2.0) + (5 * 0.3) = 13.5m.
-        // Tâm kho là Z = 15.0 -> Dãy bắt đầu từ Z = 15 - 13.5/2 = 8.25m.
-        // Tâm gian đầu tiên = 8.25 + 1.0 = 9.25m.
-        for(let i = 0; i < 6; i++) {
-            const currentZ = 9.25 + i * 2.3; // Bước nhảy = 2.0 + 0.3 = 2.3m
-
-            // Chú ý: Đã fix lỗi truyền đủ 8 tham số cho hàm createDetailedRack
-            createDetailedRack(2.4, currentZ, rackWidth, 1.0, 2, lowHeight, 3, false); 
-            createDetailedRack(6.4, currentZ, rackWidth, 1.0, 2, lowHeight, 3, false); 
-        }
-
-        // TÍNH TOÁN BĂNG CHUYỀN
-        // Dài đúng bằng tổng dãy thấp là 13.5m, nằm căn giữa ngay mốc Z = 15.0
-        createSolidBox(0x9ca3af, 4.4, 15.0, 0.8, 13.5, 0.5);
-
-        // TÍNH TOÁN CĂN GIỮA CHO DÃY CAO
-        // Gồm 6 gian (mỗi gian 2 ô dài 1.2m) nối liền mạch = 12 ô * 1.2 = 14.4m.
-        // Tâm kho là Z = 15.0 -> Dãy bắt đầu từ Z = 15 - 14.4/2 = 7.8m.
-        // Tâm gian đầu tiên = 7.8 + 1.2 = 9.0m.
-        for(let i = 0; i < 6; i++) {
-            const currentZ = 9.0 + i * 2.4; // Bước nhảy bằng đúng chiều dài gian (2.4m), không có khoảng cách
+        // 1. VẼ DÃY HÀNG THẤP (XANH): 12 ô.
+        // Gom 2 gian (mỗi gian 2 ô) thành 1 cụm -> 1 cụm = 4 ô (Dài 4.0m)
+        // Tổng 3 cụm. Khoảng cách = 0.3m.
+        // Bắt đầu từ mép tường Z = 0.5m. Tâm cụm 1 = 0.5 + 2.0 = 2.5m.
+        for(let i = 0; i < 3; i++) {
+            const currentZ = 2.5 + i * 4.3; // Bước nhảy = 4.0 (chiều dài) + 0.3 (khoảng cách) = 4.3m
             
-            createDetailedRack(7.5, currentZ, rackWidth, 1.2, 2, highHeight, 3, true);
-            createDetailedRack(14.5, currentZ, rackWidth, 1.2, 2, highHeight, 3, true);
+            createDetailedRack(2.4, currentZ, rackWidth, 1.0, 4, lowHeight, 3, false); 
+            createDetailedRack(6.4, currentZ, rackWidth, 1.0, 4, lowHeight, 3, false); 
         }
 
-        // Thiết lập lại góc nhìn Camera để bao quát hệ thống ở giữa kho
-        camera.position.set(7.5, 25, 32);
-        controls.target.set(7.5, 0, 15);
+        // 2. VẼ BĂNG CHUYỀN (XÁM)
+        // Chiều dài từ Z=0.5 đến Z=13.1m -> Dài tổng 12.6m. Tâm nằm ở Z=6.8m.
+        createSolidBox(0x9ca3af, 4.4, 6.8, 0.8, 12.6, 0.5);
+
+        // 3. VẼ DÃY HÀNG CAO (ĐỎ): 12 ô liền mạch (Dài 12 * 1.2 = 14.4m)
+        // Bắt đầu từ mép tường Z = 0.5m -> Tâm dãy nằm ở Z = 7.7m.
+        createDetailedRack(7.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true);
+        createDetailedRack(14.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true);
+
+        // Thiết lập lại góc nhìn Camera về phía đầu kho
+        camera.position.set(7.5, 25, 25);
+        controls.target.set(7.5, 0, 10);
     });
 }
