@@ -724,7 +724,7 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - TẠO KHOẢNG CÁCH DÃY THẤP ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - CHUẨN HÓA GIAN 2 Ô & KHOẢNG CÁCH 0.2 ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
@@ -758,63 +758,71 @@ if (btnLoadMekong) {
             presetGroup.add(mesh);
         }
 
-        // Hàm 2: Tạo kệ hàng 3 tầng chi tiết (Cột nhô cao hơn mâm)
-        function createDetailedRack(x, z, sizeX, sizeZ, sizeY, tiers = 3, hasBoxes = false) {
+        // Hàm 2: Tạo cụm kệ hàng (Gom thành gian, cứ 2 ô mới nhô khung lên)
+        function createDetailedRack(x, z, sizeX, bayLength, bays, sizeY, tiers = 3, hasBoxes = false) {
             const rackGroup = new THREE.Group();
             
-            const frameMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.6 }); // Xanh lam
-            const shelfMat = new THREE.MeshStandardMaterial({ color: 0xff6600, roughness: 0.5 }); // Cam
-            const boxMat = new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }); // Màu gỗ sáng
+            const frameMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.6 }); 
+            const shelfMat = new THREE.MeshStandardMaterial({ color: 0xff6600, roughness: 0.5 }); 
+            const boxMat = new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }); 
 
             const frameThick = 0.08; 
             const shelfThick = 0.05; 
             
-            const bottomTierY = sizeY * 0.15; // Tầng thấp nhất ở 15% chiều cao cột
-            const topTierY = sizeY * 0.85;    // Tầng cao nhất ở 85% chiều cao cột
+            const bottomTierY = sizeY * 0.15; 
+            const topTierY = sizeY * 0.85;    // Mâm trên cùng ở 85% cột
             const tierSpacing = (topTierY - bottomTierY) / (tiers - 1); 
-
-            // Tạo 4 cột trụ đứng
-            const pillarGeo = new THREE.BoxGeometry(frameThick, sizeY, frameThick);
-            const pX = [sizeX/2 - frameThick/2, -sizeX/2 + frameThick/2];
-            const pZ = [sizeZ/2 - frameThick/2, -sizeZ/2 + frameThick/2];
             
-            for (let px of pX) {
-                for (let pz of pZ) {
+            const totalZ = bays * bayLength;
+
+            // 1. Tạo các cột trụ đứng (Chỉ cột chẵn (0, 2, 4...) mới nhô lên)
+            for (let j = 0; j <= bays; j++) {
+                // Nếu là cột ở 2 đầu gian (ví dụ gian 2 ô thì cột 0 và 2 nhô lên, cột 1 ở giữa thụt xuống)
+                const isProtruding = (j % 2 === 0); 
+                const pH = isProtruding ? sizeY : topTierY; 
+                
+                const pillarGeo = new THREE.BoxGeometry(frameThick, pH, frameThick);
+                const pZ = -totalZ/2 + j * bayLength;
+                const pX_arr = [sizeX/2 - frameThick/2, -sizeX/2 + frameThick/2];
+                
+                for (let px of pX_arr) {
                     const pillar = new THREE.Mesh(pillarGeo, frameMat);
-                    pillar.position.set(px, sizeY / 2, pz); 
+                    pillar.position.set(px, pH / 2, pZ); 
                     rackGroup.add(pillar);
                 }
             }
 
-            // Tạo các mâm kệ ngang
-            const shelfGeo = new THREE.BoxGeometry(sizeX, shelfThick, sizeZ);
+            // 2. Tạo các mâm kệ ngang & hộp gỗ
+            const shelfGeo = new THREE.BoxGeometry(sizeX, shelfThick, bayLength);
             const shelfEdges = new THREE.EdgesGeometry(shelfGeo);
             const shelfLineMat = new THREE.LineBasicMaterial({ color: 0x552200, linewidth: 1 }); 
 
-            // Cấu hình mô hình khối gỗ
             const boxHeight = tierSpacing * 0.65;
-            const boxGeo = new THREE.BoxGeometry(sizeX * 0.75, boxHeight, sizeZ * 0.75);
+            const boxGeo = new THREE.BoxGeometry(sizeX * 0.75, boxHeight, bayLength * 0.8);
             const boxEdges = new THREE.EdgesGeometry(boxGeo);
             const boxLineMat = new THREE.LineBasicMaterial({ color: 0x5c4033, linewidth: 1 }); 
 
-            for (let i = 0; i < tiers; i++) {
-                const shelf = new THREE.Mesh(shelfGeo, shelfMat);
-                const wireframe = new THREE.LineSegments(shelfEdges, shelfLineMat);
-                shelf.add(wireframe);
+            for (let j = 0; j < bays; j++) {
+                const shelfZ = -totalZ/2 + j * bayLength + bayLength/2;
 
-                const tierY = bottomTierY + i * tierSpacing;
-                shelf.position.set(0, tierY, 0);
-                rackGroup.add(shelf);
+                for (let i = 0; i < tiers; i++) {
+                    const shelf = new THREE.Mesh(shelfGeo, shelfMat);
+                    const wireframe = new THREE.LineSegments(shelfEdges, shelfLineMat);
+                    shelf.add(wireframe);
 
-                // Thêm hộp gỗ nếu hasBoxes = true
-                if (hasBoxes) {
-                    const boxMesh = new THREE.Mesh(boxGeo, boxMat);
-                    const boxWireframe = new THREE.LineSegments(boxEdges, boxLineMat);
-                    boxMesh.add(boxWireframe);
-                    
-                    const boxY = tierY + (shelfThick / 2) + (boxHeight / 2);
-                    boxMesh.position.set(0, boxY, 0);
-                    rackGroup.add(boxMesh);
+                    const tierY = bottomTierY + i * tierSpacing;
+                    shelf.position.set(0, tierY, shelfZ);
+                    rackGroup.add(shelf);
+
+                    if (hasBoxes) {
+                        const boxMesh = new THREE.Mesh(boxGeo, boxMat);
+                        const boxWireframe = new THREE.LineSegments(boxEdges, boxLineMat);
+                        boxMesh.add(boxWireframe);
+                        
+                        const boxY = tierY + (shelfThick / 2) + (boxHeight / 2);
+                        boxMesh.position.set(0, boxY, shelfZ);
+                        rackGroup.add(boxMesh);
+                    }
                 }
             }
 
@@ -826,31 +834,33 @@ if (btnLoadMekong) {
         const lowHeight = 2.8; 
         const highHeight = 3.0; 
 
-        // 1. Vẽ dãy hàng bên trái (màu xanh): Thêm khoảng cách 0.2
-        // Mỗi kệ dài 1.0 + 0.2 khoảng trống = bước nhảy 1.2
-        for(let i = 0; i < 14; i++) {
-            const currentZ = 0.5 + i * 1.2; 
+        // 1. VẼ DÃY HÀNG THẤP (XANH): 12 ô chia làm 6 gian (mỗi gian 2 ô). Cách nhau 0.2m.
+        // Chiều dài mỗi gian = 2 ô * 1.0m = 2.0m. Bước nhảy = 2.0 + 0.2 = 2.2m.
+        for(let i = 0; i < 6; i++) {
+            // Gian đầu tiên bắt đầu tâm ở Z = 1.0
+            const currentZ = 1.0 + i * 2.2; 
 
-            if (i !== 4 && i !== 9) {
-                createDetailedRack(2.4, currentZ, rackWidth, 1.0, lowHeight, 3, false); 
-                createDetailedRack(6.4, currentZ, rackWidth, 1.0, lowHeight, 3, false); 
-            }
+            // Tham số: x, z, sizeX, bayLength(1.0), bays(2), sizeY, tiers, hasBoxes
+            createDetailedRack(2.4, currentZ, rackWidth, 1.0, 2, lowHeight, 3, false); 
+            createDetailedRack(6.4, currentZ, rackWidth, 1.0, lowHeight, 3, false); 
         }
 
-        // 2. Vẽ băng chuyền (màu xám)
-        // Vì dãy thấp giãn ra thêm thành tổng chiều dài 16.6m, ta cập nhật lại tâm Z của băng chuyền là 8.3
-        createSolidBox(0x9ca3af, 4.4, 8.3, 0.8, 16.6, 0.5);
+        // 2. VẼ BĂNG CHUYỀN (XÁM)
+        // Chiều dài thực tế của dãy thấp là từ Z=0 đến Z=13.0 -> Băng chuyền dài 13m, tâm 6.5
+        createSolidBox(0x9ca3af, 4.4, 6.5, 0.8, 13.0, 0.5);
 
-        // 3. Vẽ dãy hàng bên phải (màu đỏ)
-        for(let i = 0; i < 12; i++) {
-            const currentZ = 0.6 + i * 1.2; 
+        // 3. VẼ DÃY HÀNG CAO (ĐỎ): 12 ô chia làm 6 gian (mỗi gian 2 ô). Xếp liền mạch không có khoảng cách.
+        // Chiều dài mỗi gian = 2 ô * 1.2m = 2.4m. Bước nhảy = 2.4m.
+        for(let i = 0; i < 6; i++) {
+            // Gian đầu tiên bắt đầu tâm ở Z = 1.2
+            const currentZ = 1.2 + i * 2.4; 
             
-            createDetailedRack(7.5, currentZ, rackWidth, 1.2, highHeight, 3, true);
-            createDetailedRack(14.5, currentZ, rackWidth, 1.2, highHeight, 3, true);
+            createDetailedRack(7.5, currentZ, rackWidth, 1.2, 2, highHeight, 3, true);
+            createDetailedRack(14.5, currentZ, rackWidth, 1.2, 2, highHeight, 3, true);
         }
 
         // Thiết lập lại góc nhìn Camera
-        camera.position.set(7.5, 22, 28);
-        controls.target.set(7.5, 0, 12);
+        camera.position.set(7.5, 20, 25);
+        controls.target.set(7.5, 0, 10);
     });
 }
