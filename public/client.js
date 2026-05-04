@@ -724,7 +724,7 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - CĂN GIỮA DÃY THẤP & DÃY CAO ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - KÉO CAO NGỌN CỘT THÉP ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
@@ -758,7 +758,7 @@ if (btnLoadMekong) {
             presetGroup.add(mesh);
         }
 
-        // Hàm 2: Tạo cụm kệ hàng (Cứ 2 ô thì cột nhô cao lên)
+        // Hàm 2: Tạo cụm kệ hàng (Kéo cao ngọn cột)
         function createDetailedRack(x, z, sizeX, bayLength, bays, sizeY, tiers = 3, hasBoxes = false) {
             const rackGroup = new THREE.Group();
             
@@ -774,11 +774,13 @@ if (btnLoadMekong) {
             const tierSpacing = (topTierY - bottomTierY) / (tiers - 1); 
             
             const totalZ = bays * bayLength;
+            const extraProtrusion = 0.5; // Kéo phần cột nhô lên thêm 0.5m nữa cho giống ảnh thật
 
             // 1. Tạo các cột trụ đứng (Cột nhô cao khi index chẵn: 0, 2, 4...)
             for (let j = 0; j <= bays; j++) {
                 const isProtruding = (j % 2 === 0); 
-                const pH = isProtruding ? sizeY : topTierY + shelfThick / 2; 
+                // Nếu là cột chính -> chiều cao = sizeY + 0.5m. Nếu cột phụ -> chỉ cao bằng mâm trên cùng.
+                const pH = isProtruding ? sizeY + extraProtrusion : topTierY + shelfThick / 2; 
                 
                 const pillarGeo = new THREE.BoxGeometry(frameThick, pH, frameThick);
                 const pZ = -totalZ/2 + j * bayLength;
@@ -834,9 +836,6 @@ if (btnLoadMekong) {
         const highHeight = 3.0; 
 
         // 1. VẼ DÃY HÀNG THẤP (XANH): 12 ô chia làm 3 cụm (mỗi cụm 4 ô). Khoảng cách 0.3m.
-        // Dãy cao có tâm Z = 7.7m. Tổng chiều dài dãy thấp là 12.6m.
-        // Để căn giữa với dãy cao, dãy thấp sẽ bắt đầu từ Z = 7.7 - (12.6 / 2) = 1.4m.
-        // Tâm cụm 1 (dài 4.0m) sẽ nằm ở 1.4 + 2.0 = 3.4m.
         for(let i = 0; i < 3; i++) {
             const currentZ = 3.4 + i * 4.3; // Bước nhảy = 4.0m (chiều dài cụm) + 0.3m (khoảng cách) = 4.3m
             
@@ -845,15 +844,13 @@ if (btnLoadMekong) {
         }
 
         // 2. VẼ BĂNG CHUYỀN (XÁM)
-        // Chiều dài tổng 12.6m. Tâm nằm ở Z=7.7m (trùng với tâm của dãy cao và dãy thấp).
         createSolidBox(0x9ca3af, 4.4, 7.7, 0.8, 12.6, 0.5);
 
         // 3. VẼ DÃY HÀNG CAO (ĐỎ): 12 ô liền mạch (Dài 12 * 1.2 = 14.4m)
-        // Bắt đầu từ mép tường Z = 0.5m -> Tâm dãy nằm ở Z = 7.7m.
         createDetailedRack(7.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true);
         createDetailedRack(14.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true);
 
-        // Thiết lập lại góc nhìn Camera để thấy rõ sự cân đối giữa các dãy
+        // Thiết lập lại góc nhìn Camera
         camera.position.set(7.5, 25, 25);
         controls.target.set(7.5, 0, 10);
     });
