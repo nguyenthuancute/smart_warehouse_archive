@@ -1,0 +1,427 @@
+// warehouse.js — Quản lý SKU, Nhập/Xuất, Audit Log
+// Runs AFTER client.js (non-module, so socket is available via window.io())
+
+(function () {
+    'use strict';
+
+    // ── State ────────────────────────────────────────────────────
+    let products = [];
+
+    // ── Helpers ──────────────────────────────────────────────────
+    const $ = id => document.getElementById(id);
+    const fmt = n => new Intl.NumberFormat('vi-VN').format(Math.round(n));
+    const fmtDate = iso => new Date(iso).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
+
+    function showModal(id) { $(id).style.display = 'flex'; }
+    function hideModal(id) { $(id).style.display = 'none'; }
+
+    document.querySelectorAll('[data-close]').forEach(btn => {
+        btn.addEventListener('click', () => hideModal(btn.dataset.close));
+    });
+    document.querySelectorAll('.modal-overlay').forEach(ov => {
+        ov.addEventListener('click', e => { if (e.target === ov) hideModal(ov.id); });
+    });
+
+    // ── Tab switching ─────────────────────────────────────────────
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            btn.classList.add('active');
+            $(btn.dataset.tab).classList.add('active');
+
+            // Refresh data when switching
+            if (btn.dataset.tab === 'tab-sku') loadProducts();
+            if (btn.dataset.tab === 'tab-receipt') loadReceipts();
+            if (btn.dataset.tab === 'tab-delivery') loadDeliveries();
+            if (btn.dataset.tab === 'tab-audit') loadAuditLog();
+        });
+    });
+
+    // ── Stats bar ─────────────────────────────────────────────────
+    function refreshStats() {
+        fetch('/api/stats').then(r => r.json()).then(s => {
+            $('stat-products').textContent = s.totalProducts + ' SKU';
+            $('stat-value').textContent = '₫ ' + fmt(s.totalValue);
+            if (s.lowStockCount > 0) {
+                $('stat-lowstock').textContent = '⚠ ' + s.lowStockCount + ' sắp hết';
+                $('stat-lowstock').style.display = 'inline-flex';
+            } else {
+                $('stat-lowstock').style.display = 'none';
+            }
+        }).catch(() => {});
+    }
+
+    // ── Low stock socket listener ─────────────────────────────────
+    // The socket is initialized in client.js; we hook into it via a custom event
+    // or simply re-create a listener connection here
+    const wSocket = io();
+    wSocket.on('products_updated', data => {
+        products = data;
+        renderSkuTable(products);
+        refreshStats();
+    });
+    wSocket.on('low_stock_alert', items => {
+        if (!items.length) return;
+        const banner = $('low-stock-banner');
+        $('low-stock-msg').textContent = '⚠ Cảnh báo tồn thấp: ' + items.map(p => `${p.name} (còn ${p.quantity} ${p.unit})`).join(' · ');
+        banner.style.display = 'flex';
+    });
+
+    // ═══════════════════════════════════════════════════════════
+    // PRODUCTS — SKU
+    // ═══════════════════════════════════════════════════════════
+    function loadProducts() {
+        fetch('/api/products').then(r => r.json()).then(data => {
+            products = data;
+            renderSkuTable(products);
+            refreshStats();
+        });
+    }
+
+    function renderSkuTable(data) {
+        const search = ($('sku-search').value || '').toLowerCase();
+        const filter = $('sku-filter').value;
+        const tbody = $('sku-tbody');
+        tbody.innerHTML = '';
+
+        const filtered = data.filter(p => {
+            const matchSearch = !search ||
+                p.name.toLowerCase().includes(search) ||
+                p.sku.toLowerCase().includes(search) ||
+                (p.location || '').toLowerCase().includes(search);
+            const isLow = p.minQuantity > 0 && p.quantity <= p.minQuantity;
+            const matchFilter = filter === 'all' || (filter === 'low' && isLow) || (filter === 'ok' && !isLow);
+            return matchSearch && matchFilter;
+        });
+
+        if (!filtered.length) {
+            tbody.innerHTML = '<tr><td colspan="9" class="empty-row">Không có dữ liệu</td></tr>';
+            return;
+        }
+
+        filtered.forEach(p => {
+            const isLow = p.minQuantity > 0 && p.quantity <= p.minQuantity;
+            const tr = document.createElement('tr');
+            if (isLow) tr.classList.add('row-warn');
+            tr.innerHTML = `
+                <td><code class="sku-code">${p.sku}</code></td>
+                <td><span class="prod-name">${p.name}</span></td>
+                <td>${p.unit}</td>
+                <td class="${isLow ? 'qty-low' : 'qty-ok'}"><strong>${p.quantity}</strong>${isLow ? ' ⚠' : ''}</td>
+                <td>${p.minQuantity || '—'}</td>
+                <td><span class="location-tag">${p.location || '—'}</span></td>
+                <td>${fmt(p.price)}₫</td>
+                <td>${fmt(p.quantity * p.price)}₫</td>
+                <td>
+                    <button class="btn-tbl-edit" data-id="${p.id}">✏</button>
+                    <button class="btn-tbl-del" data-id="${p.id}">🗑</button>
+                </td>`;
+            tbody.appendChild(tr);
+        });
+
+        tbody.querySelectorAll('.btn-tbl-edit').forEach(btn => {
+            btn.addEventListener('click', () => openEditProduct(btn.dataset.id));
+        });
+        tbody.querySelectorAll('.btn-tbl-del').forEach(btn => {
+            btn.addEventListener('click', () => deleteProduct(btn.dataset.id));
+        });
+    }
+
+    $('sku-search').addEventListener('input', () => renderSkuTable(products));
+    $('sku-filter').addEventListener('change', () => renderSkuTable(products));
+
+    // Add product
+    $('btn-open-add-product').addEventListener('click', () => {
+        $('modal-product-title').textContent = 'Thêm hàng hóa mới';
+        $('prod-id').value = '';
+        ['prod-name','prod-sku','prod-unit','prod-location','prod-qty','prod-minqty','prod-price'].forEach(id => $(id).value = '');
+        $('prod-unit').value = 'cái';
+        showModal('modal-product');
+    });
+
+    function openEditProduct(id) {
+        const p = products.find(x => x.id === id);
+        if (!p) return;
+        $('modal-product-title').textContent = 'Sửa hàng hóa';
+        $('prod-id').value = p.id;
+        $('prod-name').value = p.name;
+        $('prod-sku').value = p.sku;
+        $('prod-unit').value = p.unit;
+        $('prod-location').value = p.location;
+        $('prod-qty').value = p.quantity;
+        $('prod-minqty').value = p.minQuantity;
+        $('prod-price').value = p.price;
+        showModal('modal-product');
+    }
+
+    $('btn-save-product').addEventListener('click', async () => {
+        const id = $('prod-id').value;
+        const body = {
+            name: $('prod-name').value.trim(),
+            sku: $('prod-sku').value.trim().toUpperCase(),
+            unit: $('prod-unit').value.trim() || 'cái',
+            location: $('prod-location').value.trim(),
+            quantity: parseFloat($('prod-qty').value) || 0,
+            minQuantity: parseFloat($('prod-minqty').value) || 0,
+            price: parseFloat($('prod-price').value) || 0,
+        };
+        if (!body.name || !body.sku) return alert('Vui lòng nhập tên và mã SKU!');
+        const url = id ? `/api/products/${id}` : '/api/products';
+        const method = id ? 'PUT' : 'POST';
+        const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const data = await res.json();
+        if (!res.ok) return alert(data.error || 'Lỗi lưu dữ liệu');
+        hideModal('modal-product');
+        loadProducts();
+    });
+
+    async function deleteProduct(id) {
+        const p = products.find(x => x.id === id);
+        if (!confirm(`Xóa "${p?.name}"? Thao tác không thể hoàn tác.`)) return;
+        const res = await fetch(`/api/products/${id}`, { method: 'DELETE' });
+        if (res.ok) loadProducts();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // RECEIPTS — PHIẾU NHẬP
+    // ═══════════════════════════════════════════════════════════
+    function loadReceipts() {
+        fetch('/api/receipts').then(r => r.json()).then(data => {
+            const tbody = $('receipt-tbody');
+            tbody.innerHTML = '';
+            if (!data.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-row">Chưa có phiếu nhập nào</td></tr>';
+                return;
+            }
+            [...data].reverse().forEach(rec => {
+                tbody.innerHTML += `<tr>
+                    <td><code class="sku-code">${rec.id}</code></td>
+                    <td>${rec.supplier}</td>
+                    <td>${rec.items.length} mặt hàng</td>
+                    <td>${fmt(rec.total)}₫</td>
+                    <td>${fmtDate(rec.createdAt)}</td>
+                    <td>${rec.note || '—'}</td>
+                </tr>`;
+            });
+        });
+    }
+
+    // Receipt items management
+    let recItems = [];
+    $('btn-open-receipt-form').addEventListener('click', () => {
+        recItems = [];
+        $('rec-supplier').value = '';
+        $('rec-note').value = '';
+        $('rec-items').innerHTML = '';
+        $('rec-total').textContent = '₫0';
+        addReceiptItem();
+        showModal('modal-receipt');
+    });
+
+    $('btn-add-rec-item').addEventListener('click', addReceiptItem);
+
+    function addReceiptItem() {
+        const idx = recItems.length;
+        recItems.push({ productId: '', quantity: 1, price: 0 });
+        const div = document.createElement('div');
+        div.className = 'item-row';
+        div.dataset.idx = idx;
+        div.innerHTML = `
+            <select class="item-product" data-idx="${idx}">
+                <option value="">-- Chọn hàng hóa --</option>
+                ${products.map(p => `<option value="${p.id}" data-price="${p.price}">${p.sku} — ${p.name}</option>`).join('')}
+            </select>
+            <input type="number" class="item-qty" data-idx="${idx}" placeholder="Số lượng" min="0.01" step="any" value="1">
+            <input type="number" class="item-price" data-idx="${idx}" placeholder="Đơn giá" min="0" step="any" value="0">
+            <span class="item-subtotal" data-idx="${idx}">₫0</span>
+            <button class="btn-tbl-del item-remove" data-idx="${idx}">✕</button>`;
+        $('rec-items').appendChild(div);
+        bindItemRow(div, recItems, 'rec');
+    }
+
+    function bindItemRow(div, items, prefix) {
+        const selProd = div.querySelector('.item-product');
+        const inpQty  = div.querySelector('.item-qty');
+        const inpPrice = div.querySelector('.item-price');
+        const spanSub = div.querySelector('.item-subtotal');
+        const btnDel  = div.querySelector('.item-remove');
+        const idx     = parseInt(div.dataset.idx);
+
+        selProd.addEventListener('change', () => {
+            items[idx].productId = selProd.value;
+            const opt = selProd.selectedOptions[0];
+            if (opt && opt.dataset.price) {
+                inpPrice.value = opt.dataset.price;
+                items[idx].price = parseFloat(opt.dataset.price);
+            }
+            updateSubtotal();
+        });
+        inpQty.addEventListener('input', () => { items[idx].quantity = parseFloat(inpQty.value) || 0; updateSubtotal(); });
+        inpPrice.addEventListener('input', () => { items[idx].price = parseFloat(inpPrice.value) || 0; updateSubtotal(); });
+        btnDel.addEventListener('click', () => { div.remove(); items[idx] = null; updateSubtotal(); });
+
+        function updateSubtotal() {
+            const sub = (items[idx]?.quantity || 0) * (items[idx]?.price || 0);
+            spanSub.textContent = '₫' + fmt(sub);
+            const totalEl = $(prefix === 'rec' ? 'rec-total' : 'del-total');
+            const total = items.reduce((s, it) => s + (it ? it.quantity * it.price : 0), 0);
+            totalEl.textContent = '₫' + fmt(total);
+        }
+    }
+
+    $('btn-save-receipt').addEventListener('click', async () => {
+        const items = recItems.filter(it => it && it.productId && it.quantity > 0);
+        if (!items.length) return alert('Vui lòng thêm ít nhất một mặt hàng!');
+        const body = {
+            supplier: $('rec-supplier').value.trim() || 'Không rõ',
+            note: $('rec-note').value.trim(),
+            items
+        };
+        const res = await fetch('/api/receipts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const data = await res.json();
+        if (!res.ok) return alert(data.error || 'Lỗi tạo phiếu nhập');
+        hideModal('modal-receipt');
+        loadReceipts();
+        refreshStats();
+        showToast(`✅ Phiếu nhập ${data.id} đã được tạo!`);
+    });
+
+    // ═══════════════════════════════════════════════════════════
+    // DELIVERIES — PHIẾU XUẤT
+    // ═══════════════════════════════════════════════════════════
+    function loadDeliveries() {
+        fetch('/api/deliveries').then(r => r.json()).then(data => {
+            const tbody = $('delivery-tbody');
+            tbody.innerHTML = '';
+            if (!data.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-row">Chưa có phiếu xuất nào</td></tr>';
+                return;
+            }
+            [...data].reverse().forEach(del => {
+                tbody.innerHTML += `<tr>
+                    <td><code class="sku-code">${del.id}</code></td>
+                    <td>${del.customer}</td>
+                    <td>${del.items.length} mặt hàng</td>
+                    <td>${fmt(del.total)}₫</td>
+                    <td>${fmtDate(del.createdAt)}</td>
+                    <td>${del.note || '—'}</td>
+                </tr>`;
+            });
+        });
+    }
+
+    let delItems = [];
+    $('btn-open-delivery-form').addEventListener('click', () => {
+        delItems = [];
+        $('del-customer').value = '';
+        $('del-note').value = '';
+        $('del-items').innerHTML = '';
+        $('del-total').textContent = '₫0';
+        addDeliveryItem();
+        showModal('modal-delivery');
+    });
+
+    $('btn-add-del-item').addEventListener('click', addDeliveryItem);
+
+    function addDeliveryItem() {
+        const idx = delItems.length;
+        delItems.push({ productId: '', quantity: 1, price: 0 });
+        const div = document.createElement('div');
+        div.className = 'item-row';
+        div.dataset.idx = idx;
+        div.innerHTML = `
+            <select class="item-product" data-idx="${idx}">
+                <option value="">-- Chọn hàng hóa --</option>
+                ${products.map(p => `<option value="${p.id}" data-price="${p.price}">${p.sku} — ${p.name} (tồn: ${p.quantity} ${p.unit})</option>`).join('')}
+            </select>
+            <input type="number" class="item-qty" data-idx="${idx}" placeholder="Số lượng" min="0.01" step="any" value="1">
+            <input type="number" class="item-price" data-idx="${idx}" placeholder="Đơn giá" min="0" step="any" value="0">
+            <span class="item-subtotal" data-idx="${idx}">₫0</span>
+            <button class="btn-tbl-del item-remove" data-idx="${idx}">✕</button>`;
+        $('del-items').appendChild(div);
+        bindItemRow(div, delItems, 'del');
+    }
+
+    $('btn-save-delivery').addEventListener('click', async () => {
+        const items = delItems.filter(it => it && it.productId && it.quantity > 0);
+        if (!items.length) return alert('Vui lòng thêm ít nhất một mặt hàng!');
+        const body = {
+            customer: $('del-customer').value.trim() || 'Không rõ',
+            note: $('del-note').value.trim(),
+            items
+        };
+        const res = await fetch('/api/deliveries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const data = await res.json();
+        if (!res.ok) return alert(data.error || 'Lỗi tạo phiếu xuất');
+        hideModal('modal-delivery');
+        loadDeliveries();
+        refreshStats();
+        showToast(`✅ Phiếu xuất ${data.id} đã được tạo!`);
+    });
+
+    // ═══════════════════════════════════════════════════════════
+    // AUDIT LOG
+    // ═══════════════════════════════════════════════════════════
+    const ACTION_LABEL = {
+        CREATE: { label: 'Thêm mới', cls: 'badge-success' },
+        UPDATE: { label: 'Cập nhật', cls: 'badge-info' },
+        DELETE: { label: 'Xóa', cls: 'badge-danger' },
+        IMPORT: { label: 'Nhập kho', cls: 'badge-primary' },
+        EXPORT: { label: 'Xuất kho', cls: 'badge-warning' },
+    };
+    const ENTITY_LABEL = { product: '📦 Hàng hóa', receipt: '📥 Phiếu nhập', delivery: '📤 Phiếu xuất' };
+
+    function loadAuditLog() {
+        fetch('/api/audit').then(r => r.json()).then(data => {
+            const tbody = $('audit-tbody');
+            tbody.innerHTML = '';
+            if (!data.length) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-row">Chưa có hoạt động nào</td></tr>';
+                return;
+            }
+            data.slice(0, 200).forEach(log => {
+                const act = ACTION_LABEL[log.action] || { label: log.action, cls: 'badge-info' };
+                tbody.innerHTML += `<tr>
+                    <td class="td-time">${fmtDate(log.timestamp)}</td>
+                    <td>${log.user}</td>
+                    <td><span class="badge ${act.cls}">${act.label}</span></td>
+                    <td>${ENTITY_LABEL[log.entity] || log.entity}</td>
+                    <td class="td-detail">${JSON.stringify(log.data)}</td>
+                </tr>`;
+            });
+        });
+    }
+
+    $('btn-export-audit').addEventListener('click', () => {
+        fetch('/api/audit').then(r => r.json()).then(data => {
+            const rows = [['Thời gian','Người dùng','Thao tác','Đối tượng','Chi tiết']];
+            data.forEach(l => rows.push([l.timestamp, l.user, l.action, l.entity, JSON.stringify(l.data)]));
+            const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+            const a = document.createElement('a');
+            a.href = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent(csv);
+            a.download = `audit_log_${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+        });
+    });
+
+    // ── Toast notification ────────────────────────────────────────
+    function showToast(msg) {
+        let t = document.getElementById('wh-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'wh-toast';
+            t.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#1a1a2e;color:#fff;padding:12px 20px;border-radius:8px;font-size:14px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.3);transition:opacity 0.3s';
+            document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.style.opacity = '1';
+        clearTimeout(t._timer);
+        t._timer = setTimeout(() => t.style.opacity = '0', 3000);
+    }
+
+    // ── Init ──────────────────────────────────────────────────────
+    refreshStats();
+    loadProducts();
+
+})();
