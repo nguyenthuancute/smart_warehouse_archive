@@ -724,7 +724,7 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - KHUNG CỘT NHÔ CAO ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - TẠO KHOẢNG CÁCH DÃY THẤP ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
@@ -769,9 +769,8 @@ if (btnLoadMekong) {
             const frameThick = 0.08; 
             const shelfThick = 0.05; 
             
-            // --- ĐIỂM ĐIỀU CHỈNH: Hạ mâm trên cùng xuống để lộ khung cột ---
             const bottomTierY = sizeY * 0.15; // Tầng thấp nhất ở 15% chiều cao cột
-            const topTierY = sizeY * 0.85;    // Tầng cao nhất ở 85% chiều cao cột (chừa lại 15% ngọn cột)
+            const topTierY = sizeY * 0.85;    // Tầng cao nhất ở 85% chiều cao cột
             const tierSpacing = (topTierY - bottomTierY) / (tiers - 1); 
 
             // Tạo 4 cột trụ đứng
@@ -799,7 +798,6 @@ if (btnLoadMekong) {
             const boxLineMat = new THREE.LineBasicMaterial({ color: 0x5c4033, linewidth: 1 }); 
 
             for (let i = 0; i < tiers; i++) {
-                // Thêm mâm kệ
                 const shelf = new THREE.Mesh(shelfGeo, shelfMat);
                 const wireframe = new THREE.LineSegments(shelfEdges, shelfLineMat);
                 shelf.add(wireframe);
@@ -808,7 +806,7 @@ if (btnLoadMekong) {
                 shelf.position.set(0, tierY, 0);
                 rackGroup.add(shelf);
 
-                // Thêm hộp gỗ nếu tham số hasBoxes = true
+                // Thêm hộp gỗ nếu hasBoxes = true
                 if (hasBoxes) {
                     const boxMesh = new THREE.Mesh(boxGeo, boxMat);
                     const boxWireframe = new THREE.LineSegments(boxEdges, boxLineMat);
@@ -828,9 +826,10 @@ if (btnLoadMekong) {
         const lowHeight = 2.8; 
         const highHeight = 3.0; 
 
-        // 1. Vẽ dãy hàng bên trái (màu xanh): Tham số hasBoxes = false
+        // 1. Vẽ dãy hàng bên trái (màu xanh): Thêm khoảng cách 0.2
+        // Mỗi kệ dài 1.0 + 0.2 khoảng trống = bước nhảy 1.2
         for(let i = 0; i < 14; i++) {
-            const currentZ = 0.5 + i * 1.0; 
+            const currentZ = 0.5 + i * 1.2; 
 
             if (i !== 4 && i !== 9) {
                 createDetailedRack(2.4, currentZ, rackWidth, 1.0, lowHeight, 3, false); 
@@ -838,10 +837,11 @@ if (btnLoadMekong) {
             }
         }
 
-        // 2. Vẽ băng chuyền
-        createSolidBox(0x9ca3af, 4.4, 7.0, 0.8, 14.0, 0.5);
+        // 2. Vẽ băng chuyền (màu xám)
+        // Vì dãy thấp giãn ra thêm thành tổng chiều dài 16.6m, ta cập nhật lại tâm Z của băng chuyền là 8.3
+        createSolidBox(0x9ca3af, 4.4, 8.3, 0.8, 16.6, 0.5);
 
-        // 3. Vẽ dãy hàng bên phải (màu đỏ): Tham số hasBoxes = true
+        // 3. Vẽ dãy hàng bên phải (màu đỏ)
         for(let i = 0; i < 12; i++) {
             const currentZ = 0.6 + i * 1.2; 
             
@@ -850,7 +850,7 @@ if (btnLoadMekong) {
         }
 
         // Thiết lập lại góc nhìn Camera
-        camera.position.set(7.5, 20, 25);
-        controls.target.set(7.5, 0, 10);
+        camera.position.set(7.5, 22, 28);
+        controls.target.set(7.5, 0, 12);
     });
 }
