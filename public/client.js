@@ -724,7 +724,7 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - THÊM VÁCH TRONG SUỐT & ĐỒNG BỘ MÀU CỬA ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - LẤP KÍN MẶT TAM GIÁC DƯỚI MÁI ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
@@ -850,11 +850,9 @@ if (btnLoadMekong) {
         createDetailedRack(7.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true);
         createDetailedRack(14.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true);
 
-        // 2. Hệ thống cửa (Đã đồng bộ màu cửa nhỏ)
+        // 2. Hệ thống cửa
         const lineMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
         const wingGeo = new THREE.BoxGeometry(1.0, 2.5, 0.1);
-        
-        // ĐỔI MÀU CỬA BÉ SANG MÀU XÁM KIM LOẠI GIỐNG CỬA CUỐN
         const commonDoorMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.5 });
         
         const wingEdges = new THREE.EdgesGeometry(wingGeo);
@@ -870,16 +868,15 @@ if (btnLoadMekong) {
         rollDoor1.position.set(7.5, 1.75, 29.95); presetGroup.add(rollDoor1);
         rollDoor2.position.set(12.0, 1.75, 29.95); presetGroup.add(rollDoor2);
 
-        // --- 3. DỰNG MÁI NHÀ CHỮ A VÀ CÁC BỨC TƯỜNG ---
-        // Vật liệu mái và tường trong suốt
+        // --- 3. DỰNG MÁI NHÀ CHỮ A, CÁC BỨC TƯỜNG VÀ MẶT TAM GIÁC ---
         const shellMat = new THREE.MeshStandardMaterial({ 
             color: 0xe5e7eb, roughness: 0.2, transparent: true, opacity: 0.3, side: THREE.DoubleSide 
         });
 
-        // 3.1. Dựng 4 bức tường xung quanh
         const wallThick = 0.05;
         const wallHeight = 5.0;
         
+        // 3.1. Dựng 4 bức tường
         const leftWall = new THREE.Mesh(new THREE.BoxGeometry(wallThick, wallHeight, 30.0), shellMat);
         leftWall.position.set(0, wallHeight/2, 15.0);
         presetGroup.add(leftWall);
@@ -896,7 +893,27 @@ if (btnLoadMekong) {
         frontWall.position.set(7.5, wallHeight/2, 30.0);
         presetGroup.add(frontWall);
 
-        // 3.2. Dựng mái nhà
+        // 3.2. Lấp khe hở hình tam giác (Gable) ở hai đầu mái
+        const gableShape = new THREE.Shape();
+        gableShape.moveTo(-7.5, 0); // Góc dưới cùng bên trái
+        gableShape.lineTo(7.5, 0);  // Góc dưới cùng bên phải
+        gableShape.lineTo(0, 2.5);  // Đỉnh chóp của mái nhà (cao 2.5m)
+        gableShape.lineTo(-7.5, 0); // Vòng về điểm bắt đầu
+        
+        const gableGeo = new THREE.ExtrudeGeometry(gableShape, { depth: wallThick, bevelEnabled: false });
+        gableGeo.translate(0, 0, -wallThick / 2); // Căn lề giữa để vừa khớp độ dày của tường
+
+        // Tam giác lấp mặt sau kho
+        const backGable = new THREE.Mesh(gableGeo, shellMat);
+        backGable.position.set(7.5, wallHeight, 0); 
+        presetGroup.add(backGable);
+
+        // Tam giác lấp mặt trước kho
+        const frontGable = new THREE.Mesh(gableGeo, shellMat);
+        frontGable.position.set(7.5, wallHeight, 30.0); 
+        presetGroup.add(frontGable);
+
+        // 3.3. Dựng mái nhà
         const roofPeak = 2.5;  
         const halfW = 7.5;     
         const slantLen = Math.sqrt(halfW * halfW + roofPeak * roofPeak); 
