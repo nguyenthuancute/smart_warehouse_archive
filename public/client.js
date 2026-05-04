@@ -724,7 +724,7 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - THÊM CỬA 2.5M ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - THÊM CỬA 2 CÁNH VÀ 2 CỬA CUỐN ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
@@ -846,26 +846,50 @@ if (btnLoadMekong) {
         createDetailedRack(7.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true);
         createDetailedRack(14.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true);
 
-        // 4. VẼ CỬA RA VÀO (GÓC DƯỚI BÊN TRÁI)
-        const doorWidth = 2.0; // Rộng 2m
-        const doorHeight = 2.5; // Cao 2.5m
-        const doorDepth = 0.1; // Độ mỏng của cửa
-        const doorGeo = new THREE.BoxGeometry(doorWidth, doorHeight, doorDepth);
-        const doorMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.8 }); // Màu nâu gỗ
-        const doorMesh = new THREE.Mesh(doorGeo, doorMat);
-        
-        // Viền đen cho rõ nét cửa
-        const doorEdges = new THREE.EdgesGeometry(doorGeo);
-        const doorLineMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
-        const doorWireframe = new THREE.LineSegments(doorEdges, doorLineMat);
-        doorMesh.add(doorWireframe);
-        
-        // Đặt ở vị trí sát tường dưới (Z = 29.95 để không trùng mặt tường 30), lệch sang trái (X = 1.5)
-        doorMesh.position.set(1.5, doorHeight / 2, 29.95);
-        presetGroup.add(doorMesh);
+        // 4. VẼ HỆ THỐNG CỬA (ÉP SÁT TƯỜNG DƯỚI Z = 30)
+        const doorDepth = 0.1;
+        const lineMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
 
-        // Thiết lập lại góc nhìn Camera: Lùi ra xa tới Z=38 để quan sát được cửa ở mốc Z=30
-        camera.position.set(7.5, 30, 38);
+        // --- 4.1. CỬA ĐÔI (Cửa 2 cánh góc trái) ---
+        const wingWidth = 1.0; 
+        const doorHeight = 2.5; 
+        const wingGeo = new THREE.BoxGeometry(wingWidth, doorHeight, doorDepth);
+        const wingMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.8 }); // Màu gỗ
+        const wingEdges = new THREE.EdgesGeometry(wingGeo);
+        
+        // Cánh trái
+        const leftWing = new THREE.Mesh(wingGeo, wingMat);
+        leftWing.add(new THREE.LineSegments(wingEdges, lineMat));
+        leftWing.position.set(1.0, doorHeight / 2, 29.95);
+        presetGroup.add(leftWing);
+
+        // Cánh phải
+        const rightWing = new THREE.Mesh(wingGeo, wingMat);
+        rightWing.add(new THREE.LineSegments(wingEdges, lineMat));
+        rightWing.position.set(2.0, doorHeight / 2, 29.95);
+        presetGroup.add(rightWing);
+
+        // --- 4.2. CỬA CUỐN (2 cửa góc phải) ---
+        const rollWidth = 3.5; 
+        const rollHeight = 3.5; 
+        const rollGeo = new THREE.BoxGeometry(rollWidth, rollHeight, doorDepth);
+        const rollMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.5 }); // Màu xám kim loại
+        const rollEdges = new THREE.EdgesGeometry(rollGeo);
+
+        // Cửa cuốn 1 (Ngay lối đi giữa)
+        const rollDoor1 = new THREE.Mesh(rollGeo, rollMat);
+        rollDoor1.add(new THREE.LineSegments(rollEdges, lineMat));
+        rollDoor1.position.set(7.5, rollHeight / 2, 29.95);
+        presetGroup.add(rollDoor1);
+
+        // Cửa cuốn 2 (Lối đi bìa phải)
+        const rollDoor2 = new THREE.Mesh(rollGeo, rollMat);
+        rollDoor2.add(new THREE.LineSegments(rollEdges, lineMat));
+        rollDoor2.position.set(12.0, rollHeight / 2, 29.95);
+        presetGroup.add(rollDoor2);
+
+        // Thiết lập lại góc nhìn Camera để bao quát tường dưới
+        camera.position.set(7.5, 28, 42);
         controls.target.set(7.5, 0, 15);
     });
 }
