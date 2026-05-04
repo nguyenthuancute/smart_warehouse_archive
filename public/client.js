@@ -724,7 +724,7 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - THÊM CỬA 2 CÁNH VÀ 2 CỬA CUỐN ---
+// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - THÊM MÁI CHỮ A VÀ ĐÈN TRẦN ---
 const btnLoadMekong = document.getElementById('btn-load-mekong');
 
 if (btnLoadMekong) {
@@ -745,44 +745,34 @@ if (btnLoadMekong) {
             presetGroup.remove(presetGroup.children[0]);
         }
 
-        // Hàm 1: Tạo khối đặc (dùng cho băng chuyền)
+        // 1. CÁC HÀM TẠO VẬT THỂ CƠ BẢN
         function createSolidBox(color, x, z, sizeX, sizeZ, sizeY) {
             const geo = new THREE.BoxGeometry(sizeX, sizeY, sizeZ);
             const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.7 });
             const mesh = new THREE.Mesh(geo, mat);
             const edges = new THREE.EdgesGeometry(geo);
             const lineMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
-            const wireframe = new THREE.LineSegments(edges, lineMat);
-            mesh.add(wireframe);
+            mesh.add(new THREE.LineSegments(edges, lineMat));
             mesh.position.set(x, sizeY / 2, z); 
             presetGroup.add(mesh);
         }
 
-        // Hàm 2: Tạo cụm kệ hàng 
         function createDetailedRack(x, z, sizeX, bayLength, bays, sizeY, tiers = 3, hasBoxes = false) {
             const rackGroup = new THREE.Group();
-            
             const frameMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.6 }); 
             const shelfMat = new THREE.MeshStandardMaterial({ color: 0xff6600, roughness: 0.5 }); 
             const boxMat = new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }); 
-
-            const frameThick = 0.08; 
-            const shelfThick = 0.05; 
-            
-            const bottomTierY = sizeY * 0.15; 
-            const topTierY = sizeY * 0.85; 
+            const frameThick = 0.08, shelfThick = 0.05; 
+            const bottomTierY = sizeY * 0.15, topTierY = sizeY * 0.85; 
             const tierSpacing = (topTierY - bottomTierY) / (tiers - 1); 
-            
             const totalZ = bays * bayLength;
 
             for (let j = 0; j <= bays; j++) {
                 const isProtruding = (j % 2 === 0); 
                 const pH = isProtruding ? sizeY : topTierY + shelfThick / 2; 
-                
                 const pillarGeo = new THREE.BoxGeometry(frameThick, pH, frameThick);
                 const pZ = -totalZ/2 + j * bayLength;
                 const pX_arr = [sizeX/2 - frameThick/2, -sizeX/2 + frameThick/2];
-                
                 for (let px of pX_arr) {
                     const pillar = new THREE.Mesh(pillarGeo, frameMat);
                     pillar.position.set(px, pH / 2, pZ); 
@@ -793,7 +783,6 @@ if (btnLoadMekong) {
             const shelfGeo = new THREE.BoxGeometry(sizeX, shelfThick, bayLength);
             const shelfEdges = new THREE.EdgesGeometry(shelfGeo);
             const shelfLineMat = new THREE.LineBasicMaterial({ color: 0x552200, linewidth: 1 }); 
-
             const boxHeight = tierSpacing * 0.65;
             const boxGeo = new THREE.BoxGeometry(sizeX * 0.75, boxHeight, bayLength * 0.8);
             const boxEdges = new THREE.EdgesGeometry(boxGeo);
@@ -801,95 +790,135 @@ if (btnLoadMekong) {
 
             for (let j = 0; j < bays; j++) {
                 const shelfZ = -totalZ/2 + j * bayLength + bayLength/2;
-
                 for (let i = 0; i < tiers; i++) {
                     const shelf = new THREE.Mesh(shelfGeo, shelfMat);
-                    const wireframe = new THREE.LineSegments(shelfEdges, shelfLineMat);
-                    shelf.add(wireframe);
-
+                    shelf.add(new THREE.LineSegments(shelfEdges, shelfLineMat));
                     const tierY = bottomTierY + i * tierSpacing;
                     shelf.position.set(0, tierY, shelfZ);
                     rackGroup.add(shelf);
-
                     if (hasBoxes) {
                         const boxMesh = new THREE.Mesh(boxGeo, boxMat);
-                        const boxWireframe = new THREE.LineSegments(boxEdges, boxLineMat);
-                        boxMesh.add(boxWireframe);
-                        
-                        const boxY = tierY + (shelfThick / 2) + (boxHeight / 2);
-                        boxMesh.position.set(0, boxY, shelfZ);
+                        boxMesh.add(new THREE.LineSegments(boxEdges, boxLineMat));
+                        boxMesh.position.set(0, tierY + (shelfThick / 2) + (boxHeight / 2), shelfZ);
                         rackGroup.add(boxMesh);
                     }
                 }
             }
-
             rackGroup.position.set(x, 0, z);
             presetGroup.add(rackGroup);
         }
 
+        // --- HÀM TẠO ĐÈN TRẦN ---
+        function createHangingLight(x, z, startY, endY) {
+            const lightGroup = new THREE.Group();
+            
+            // Dây cáp treo
+            const wireLen = startY - endY;
+            const wireGeo = new THREE.CylinderGeometry(0.015, 0.015, wireLen);
+            const wireMat = new THREE.MeshBasicMaterial({ color: 0x333333 });
+            const wire = new THREE.Mesh(wireGeo, wireMat);
+            wire.position.set(0, endY + wireLen/2, 0); 
+            lightGroup.add(wire);
+
+            // Chao đèn (Cone)
+            const shadeGeo = new THREE.ConeGeometry(0.25, 0.3, 16);
+            const shadeMat = new THREE.MeshStandardMaterial({ color: 0x71717a, roughness: 0.4 }); // Xám kim loại
+            const shade = new THREE.Mesh(shadeGeo, shadeMat);
+            shade.position.set(0, endY, 0);
+            lightGroup.add(shade);
+
+            // Bóng đèn phát sáng (Sphere)
+            const bulbGeo = new THREE.SphereGeometry(0.12, 16, 16);
+            const bulbMat = new THREE.MeshBasicMaterial({ color: 0xfffbeb }); // Vàng nhạt sáng
+            const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+            bulb.position.set(0, endY - 0.1, 0);
+            lightGroup.add(bulb);
+
+            lightGroup.position.set(x, 0, z);
+            presetGroup.add(lightGroup);
+        }
+
+        // --- KHỞI TẠO NỘI THẤT KHO ---
         const rackWidth = 1.0; 
         const lowHeight = 2.8; 
         const highHeight = 3.0; 
 
-        // 1. VẼ DÃY HÀNG THẤP (XANH)
+        // 1. Dãy thấp & Băng chuyền & Dãy cao
         for(let i = 0; i < 3; i++) {
             const currentZ = 3.4 + i * 4.3; 
-            
             createDetailedRack(2.4, currentZ, rackWidth, 1.0, 4, lowHeight, 3, false); 
             createDetailedRack(6.4, currentZ, rackWidth, 1.0, 4, lowHeight, 3, false); 
         }
-
-        // 2. VẼ BĂNG CHUYỀN (XÁM)
         createSolidBox(0x9ca3af, 4.4, 7.7, 0.8, 12.6, 0.5);
-
-        // 3. VẼ DÃY HÀNG CAO (ĐỎ)
         createDetailedRack(7.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true);
         createDetailedRack(14.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true);
 
-        // 4. VẼ HỆ THỐNG CỬA (ÉP SÁT TƯỜNG DƯỚI Z = 30)
-        const doorDepth = 0.1;
+        // 2. Hệ thống cửa
         const lineMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
-
-        // --- 4.1. CỬA ĐÔI (Cửa 2 cánh góc trái) ---
-        const wingWidth = 1.0; 
-        const doorHeight = 2.5; 
-        const wingGeo = new THREE.BoxGeometry(wingWidth, doorHeight, doorDepth);
-        const wingMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.8 }); // Màu gỗ
+        // Cửa đôi
+        const wingGeo = new THREE.BoxGeometry(1.0, 2.5, 0.1);
+        const wingMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.8 });
         const wingEdges = new THREE.EdgesGeometry(wingGeo);
-        
-        // Cánh trái
-        const leftWing = new THREE.Mesh(wingGeo, wingMat);
-        leftWing.add(new THREE.LineSegments(wingEdges, lineMat));
-        leftWing.position.set(1.0, doorHeight / 2, 29.95);
-        presetGroup.add(leftWing);
-
-        // Cánh phải
-        const rightWing = new THREE.Mesh(wingGeo, wingMat);
-        rightWing.add(new THREE.LineSegments(wingEdges, lineMat));
-        rightWing.position.set(2.0, doorHeight / 2, 29.95);
-        presetGroup.add(rightWing);
-
-        // --- 4.2. CỬA CUỐN (2 cửa góc phải) ---
-        const rollWidth = 3.5; 
-        const rollHeight = 3.5; 
-        const rollGeo = new THREE.BoxGeometry(rollWidth, rollHeight, doorDepth);
-        const rollMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.5 }); // Màu xám kim loại
+        const leftWing = new THREE.Mesh(wingGeo, wingMat); leftWing.add(new THREE.LineSegments(wingEdges, lineMat));
+        const rightWing = new THREE.Mesh(wingGeo, wingMat); rightWing.add(new THREE.LineSegments(wingEdges, lineMat));
+        leftWing.position.set(1.0, 1.25, 29.95); presetGroup.add(leftWing);
+        rightWing.position.set(2.0, 1.25, 29.95); presetGroup.add(rightWing);
+        // Cửa cuốn
+        const rollGeo = new THREE.BoxGeometry(3.5, 3.5, 0.1);
+        const rollMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.5 });
         const rollEdges = new THREE.EdgesGeometry(rollGeo);
+        const rollDoor1 = new THREE.Mesh(rollGeo, rollMat); rollDoor1.add(new THREE.LineSegments(rollEdges, lineMat));
+        const rollDoor2 = new THREE.Mesh(rollGeo, rollMat); rollDoor2.add(new THREE.LineSegments(rollEdges, lineMat));
+        rollDoor1.position.set(7.5, 1.75, 29.95); presetGroup.add(rollDoor1);
+        rollDoor2.position.set(12.0, 1.75, 29.95); presetGroup.add(rollDoor2);
 
-        // Cửa cuốn 1 (Ngay lối đi giữa)
-        const rollDoor1 = new THREE.Mesh(rollGeo, rollMat);
-        rollDoor1.add(new THREE.LineSegments(rollEdges, lineMat));
-        rollDoor1.position.set(7.5, rollHeight / 2, 29.95);
-        presetGroup.add(rollDoor1);
+        // --- 3. DỰNG MÁI NHÀ CHỮ A (MÁI BÁN TRONG SUỐT) ---
+        const roofYBase = 5.0; // Bắt đầu từ mép tường cao 5m
+        const roofPeak = 2.5;  // Mái nhô cao thêm 2.5m
+        const halfW = 7.5;     // Một nửa chiều rộng kho
+        const slantLen = Math.sqrt(halfW * halfW + roofPeak * roofPeak); // Đường chéo mái
+        const roofAngle = Math.atan2(roofPeak, halfW);
 
-        // Cửa cuốn 2 (Lối đi bìa phải)
-        const rollDoor2 = new THREE.Mesh(rollGeo, rollMat);
-        rollDoor2.add(new THREE.LineSegments(rollEdges, lineMat));
-        rollDoor2.position.set(12.0, rollHeight / 2, 29.95);
-        presetGroup.add(rollDoor2);
+        // Vật liệu mái: Độ mờ 30% để nhìn xuyên thấu vào trong
+        const roofMat = new THREE.MeshStandardMaterial({ 
+            color: 0xe5e7eb, 
+            roughness: 0.2, 
+            transparent: true, 
+            opacity: 0.3, 
+            side: THREE.DoubleSide 
+        });
+        // Thiết kế khung giằng mái (chia 8 đoạn dọc)
+        const roofGeo = new THREE.BoxGeometry(slantLen, 0.05, 30.0, 1, 1, 8); 
+        const roofEdges = new THREE.EdgesGeometry(roofGeo);
+        const trussMat = new THREE.LineBasicMaterial({ color: 0x374151, linewidth: 2 }); // Khung thép tối màu
 
-        // Thiết lập lại góc nhìn Camera để bao quát tường dưới
-        camera.position.set(7.5, 28, 42);
-        controls.target.set(7.5, 0, 15);
+        // Mái bên trái
+        const leftRoof = new THREE.Mesh(roofGeo, roofMat);
+        leftRoof.add(new THREE.LineSegments(roofEdges, trussMat));
+        leftRoof.position.set(halfW / 2, roofYBase + roofPeak / 2, 15.0);
+        leftRoof.rotation.z = roofAngle;
+        presetGroup.add(leftRoof);
+
+        // Mái bên phải
+        const rightRoof = new THREE.Mesh(roofGeo, roofMat);
+        rightRoof.add(new THREE.LineSegments(roofEdges, trussMat));
+        rightRoof.position.set(15.0 - halfW / 2, roofYBase + roofPeak / 2, 15.0);
+        rightRoof.rotation.z = -roofAngle;
+        presetGroup.add(rightRoof);
+
+        // --- 4. RẢI HỆ THỐNG ĐÈN TRẦN ---
+        // 3 hàng dọc (lối đi trái, lối đi giữa, lối đi phải), treo cách nhau mỗi 5m theo trục Z
+        for(let z = 2.5; z <= 27.5; z += 5.0) {
+            // Hàng trái (Bắt đầu từ nóc mái trái cao 6.25m, thả xuống 4.2m)
+            createHangingLight(3.75, z, 6.25, 4.2);
+            // Hàng giữa (Bắt đỉnh nóc cao 7.5m, thả xuống 4.2m)
+            createHangingLight(7.5, z, 7.5, 4.2);
+            // Hàng phải (Nóc mái phải cao 6.25m, thả xuống 4.2m)
+            createHangingLight(11.25, z, 6.25, 4.2);
+        }
+
+        // Chỉnh góc Camera: Nhìn bao quát từ trên xuống chéo góc, xuyên qua mái mờ
+        camera.position.set(20, 20, 40);
+        controls.target.set(7.5, 2.5, 15);
     });
 }
