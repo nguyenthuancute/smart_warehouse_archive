@@ -628,9 +628,9 @@ function animate() {
 }
 animate();
 
-const viewport = document.getElementById('viewport');
 window.addEventListener('resize', () => {
-    const { clientWidth, clientHeight } = viewport;
+    const { clientWidth, clientHeight } = container;
+    if (clientWidth === 0 || clientHeight === 0) return;
     camera.aspect = clientWidth / clientHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(clientWidth, clientHeight);
@@ -640,53 +640,258 @@ window.addEventListener('resize', () => {
     axisRenderer.setSize(axisContainer.clientWidth, axisContainer.clientHeight);
 });
 
-// Initial setup
-createRoom3D(roomConfig.length, roomConfig.width, roomConfig.height);
-renderAnchorList();
-renderObjectList();
-window.dispatchEvent(new Event('resize'));
+// --- PRESET WAREHOUSE LOGIC ---
+function loadMekongPreset() {
+    document.getElementById('inpL').value = 15.0;
+    document.getElementById('inpW').value = 30.0;
+    document.getElementById('inpH').value = 5.0;
+    updateRoom();
 
+    let presetGroup = scene.getObjectByName('presetGroup');
+    if (!presetGroup) {
+        presetGroup = new THREE.Group();
+        presetGroup.name = 'presetGroup';
+        scene.add(presetGroup);
+    }
+    while (presetGroup.children.length > 0) {
+        presetGroup.remove(presetGroup.children[0]);
+    }
 
-// --- UI LOGIC (MOVED FROM INDEX.HTML) ---
+    function createSolidBox(color, x, z, sizeX, sizeZ, sizeY) {
+        const geo = new THREE.BoxGeometry(sizeX, sizeY, sizeZ);
+        const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.7 });
+        const mesh = new THREE.Mesh(geo, mat);
+        const edges = new THREE.EdgesGeometry(geo);
+        const lineMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+        mesh.add(new THREE.LineSegments(edges, lineMat));
+        mesh.position.set(x, sizeY / 2, z); 
+        presetGroup.add(mesh);
+    }
 
-// Switch between 3D and 2D modes
-const btn3d = document.getElementById('btn-mode-3d');
-const btn2d = document.getElementById('btn-mode-2d');
-const sceneContainer = document.getElementById('scene-container');
-const mapContainer = document.getElementById('map-2d-container');
+    function createDetailedRack(x, z, sizeX, bayLength, bays, sizeY, tiers = 3, hasBoxes = false) {
+        const rackGroup = new THREE.Group();
+        const frameMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.6 }); 
+        const shelfMat = new THREE.MeshStandardMaterial({ color: 0xff6600, roughness: 0.5 }); 
+        const boxMat = new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }); 
+        const frameThick = 0.08, shelfThick = 0.05; 
+        const bottomTierY = sizeY * 0.15, topTierY = sizeY * 0.85; 
+        const tierSpacing = (topTierY - bottomTierY) / (tiers - 1); 
+        const totalZ = bays * bayLength;
 
-btn3d.addEventListener('click', () => {
-    sceneContainer.style.display = 'block';
-    mapContainer.style.display = 'none';
-    axisContainer.style.display = 'block';
-    btn3d.classList.add('active');
-    btn2d.classList.remove('active');
-});
-
-btn2d.addEventListener('click', () => {
-    sceneContainer.style.display = 'none';
-    mapContainer.style.display = 'flex';
-    axisContainer.style.display = 'none';
-    btn2d.classList.add('active');
-    btn3d.classList.remove('active');
-    window.dispatchEvent(new Event('resize'));
-});
-
-// Collapsible sections
-const collapsibles = document.querySelectorAll('.collapsible');
-collapsibles.forEach(coll => {
-    coll.addEventListener('click', () => {
-        coll.classList.toggle('active');
-        const content = coll.nextElementSibling;
-        if (content.style.maxHeight && content.style.maxHeight !== 'fit-content') {
-            content.style.maxHeight = null;
-        } else {
-            content.style.maxHeight = content.scrollHeight + "px";
+        for (let j = 0; j <= bays; j++) {
+            const isProtruding = (j % 2 === 0); 
+            const pH = isProtruding ? sizeY : topTierY + shelfThick / 2; 
+            const pillarGeo = new THREE.BoxGeometry(frameThick, pH, frameThick);
+            const pZ = -totalZ/2 + j * bayLength;
+            const pX_arr = [sizeX/2 - frameThick/2, -sizeX/2 + frameThick/2];
+            for (let px of pX_arr) {
+                const pillar = new THREE.Mesh(pillarGeo, frameMat);
+                pillar.position.set(px, pH / 2, pZ); 
+                rackGroup.add(pillar);
+            }
         }
+
+        const shelfGeo = new THREE.BoxGeometry(sizeX, shelfThick, bayLength);
+        const shelfEdges = new THREE.EdgesGeometry(shelfGeo);
+        const shelfLineMat = new THREE.LineBasicMaterial({ color: 0x552200, linewidth: 1 }); 
+        const boxHeight = tierSpacing * 0.65;
+        const boxGeo = new THREE.BoxGeometry(sizeX * 0.75, boxHeight, bayLength * 0.8);
+        const boxEdges = new THREE.EdgesGeometry(boxGeo);
+        const boxLineMat = new THREE.LineBasicMaterial({ color: 0x5c4033, linewidth: 1 }); 
+
+        for (let j = 0; j < bays; j++) {
+            const shelfZ = -totalZ/2 + j * bayLength + bayLength/2;
+            for (let i = 0; i < tiers; i++) {
+                const shelf = new THREE.Mesh(shelfGeo, shelfMat);
+                shelf.add(new THREE.LineSegments(shelfEdges, shelfLineMat));
+                const tierY = bottomTierY + i * tierSpacing;
+                shelf.position.set(0, tierY, shelfZ);
+                rackGroup.add(shelf);
+                if (hasBoxes) {
+                    const boxMesh = new THREE.Mesh(boxGeo, boxMat);
+                    boxMesh.add(new THREE.LineSegments(boxEdges, boxLineMat));
+                    boxMesh.position.set(0, tierY + (shelfThick / 2) + (boxHeight / 2), shelfZ);
+                    rackGroup.add(boxMesh);
+                }
+            }
+        }
+        rackGroup.position.set(x, 0, z);
+        presetGroup.add(rackGroup);
+    }
+
+    function createHangingLight(x, z, startY, endY) {
+        const lightGroup = new THREE.Group();
+        
+        const wireLen = startY - endY;
+        const wireGeo = new THREE.CylinderGeometry(0.015, 0.015, wireLen);
+        const wireMat = new THREE.MeshBasicMaterial({ color: 0x333333 });
+        const wire = new THREE.Mesh(wireGeo, wireMat);
+        wire.position.set(0, endY + wireLen/2, 0); 
+        lightGroup.add(wire);
+
+        const shadeGeo = new THREE.ConeGeometry(0.25, 0.3, 16);
+        const shadeMat = new THREE.MeshStandardMaterial({ color: 0x71717a, roughness: 0.4 }); 
+        const shade = new THREE.Mesh(shadeGeo, shadeMat);
+        shade.position.set(0, endY, 0);
+        lightGroup.add(shade);
+
+        const bulbGeo = new THREE.SphereGeometry(0.12, 16, 16);
+        const bulbMat = new THREE.MeshBasicMaterial({ color: 0xfffbeb }); 
+        const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+        bulb.position.set(0, endY - 0.1, 0);
+        lightGroup.add(bulb);
+
+        lightGroup.position.set(x, 0, z);
+        presetGroup.add(lightGroup);
+    }
+
+    const rackWidth = 1.0; 
+    const lowHeight = 2.8; 
+    const highHeight = 3.0; 
+
+    for(let i = 0; i < 3; i++) {
+        const currentZ = 3.4 + i * 4.3; 
+        createDetailedRack(2.4, currentZ, rackWidth, 1.0, 4, lowHeight, 3, false); 
+        createDetailedRack(6.4, currentZ, rackWidth, 1.0, 4, lowHeight, 3, false); 
+    }
+    createSolidBox(0x9ca3af, 4.4, 7.7, 0.8, 12.6, 0.5);
+    createDetailedRack(7.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true);
+    createDetailedRack(14.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true);
+
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+    const wingGeo = new THREE.BoxGeometry(1.0, 2.5, 0.1);
+    const commonDoorMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.5 });
+    
+    const wingEdges = new THREE.EdgesGeometry(wingGeo);
+    const leftWing = new THREE.Mesh(wingGeo, commonDoorMat); leftWing.add(new THREE.LineSegments(wingEdges, lineMat));
+    const rightWing = new THREE.Mesh(wingGeo, commonDoorMat); rightWing.add(new THREE.LineSegments(wingEdges, lineMat));
+    leftWing.position.set(1.0, 1.25, 29.95); presetGroup.add(leftWing);
+    rightWing.position.set(2.0, 1.25, 29.95); presetGroup.add(rightWing);
+
+    const rollGeo = new THREE.BoxGeometry(3.5, 3.5, 0.1);
+    const rollEdges = new THREE.EdgesGeometry(rollGeo);
+    const rollDoor1 = new THREE.Mesh(rollGeo, commonDoorMat); rollDoor1.add(new THREE.LineSegments(rollEdges, lineMat));
+    const rollDoor2 = new THREE.Mesh(rollGeo, commonDoorMat); rollDoor2.add(new THREE.LineSegments(rollEdges, lineMat));
+    rollDoor1.position.set(7.5, 1.75, 29.95); presetGroup.add(rollDoor1);
+    rollDoor2.position.set(12.0, 1.75, 29.95); presetGroup.add(rollDoor2);
+
+    const shellMat = new THREE.MeshStandardMaterial({ 
+        color: 0xe5e7eb, roughness: 0.2, transparent: true, opacity: 0.3, side: THREE.DoubleSide 
     });
+
+    const wallThick = 0.05;
+    const wallHeight = 5.0;
+    
+    const leftWall = new THREE.Mesh(new THREE.BoxGeometry(wallThick, wallHeight, 30.0), shellMat);
+    leftWall.position.set(0, wallHeight/2, 15.0);
+    presetGroup.add(leftWall);
+
+    const rightWall = new THREE.Mesh(new THREE.BoxGeometry(wallThick, wallHeight, 30.0), shellMat);
+    rightWall.position.set(15.0, wallHeight/2, 15.0);
+    presetGroup.add(rightWall);
+
+    const backWall = new THREE.Mesh(new THREE.BoxGeometry(15.0, wallHeight, wallThick), shellMat);
+    backWall.position.set(7.5, wallHeight/2, 0);
+    presetGroup.add(backWall);
+
+    const frontWall = new THREE.Mesh(new THREE.BoxGeometry(15.0, wallHeight, wallThick), shellMat);
+    frontWall.position.set(7.5, wallHeight/2, 30.0);
+    presetGroup.add(frontWall);
+
+    const gableShape = new THREE.Shape();
+    gableShape.moveTo(-7.5, 0);
+    gableShape.lineTo(7.5, 0);
+    gableShape.lineTo(0, 2.5);
+    gableShape.lineTo(-7.5, 0);
+    
+    const gableGeo = new THREE.ExtrudeGeometry(gableShape, { depth: wallThick, bevelEnabled: false });
+    gableGeo.translate(0, 0, -wallThick / 2);
+
+    const backGable = new THREE.Mesh(gableGeo, shellMat);
+    backGable.position.set(7.5, wallHeight, 0); 
+    presetGroup.add(backGable);
+
+    const frontGable = new THREE.Mesh(gableGeo, shellMat);
+    frontGable.position.set(7.5, wallHeight, 30.0); 
+    presetGroup.add(frontGable);
+
+    const roofPeak = 2.5;  
+    const halfW = 7.5;     
+    const slantLen = Math.sqrt(halfW * halfW + roofPeak * roofPeak); 
+    const roofAngle = Math.atan2(roofPeak, halfW);
+
+    const roofGeo = new THREE.BoxGeometry(slantLen, 0.05, 30.0, 1, 1, 8); 
+    const roofEdges = new THREE.EdgesGeometry(roofGeo);
+    const trussMat = new THREE.LineBasicMaterial({ color: 0x374151, linewidth: 2 }); 
+
+    const leftRoof = new THREE.Mesh(roofGeo, shellMat);
+    leftRoof.add(new THREE.LineSegments(roofEdges, trussMat));
+    leftRoof.position.set(halfW / 2, wallHeight + roofPeak / 2, 15.0);
+    leftRoof.rotation.z = roofAngle;
+    presetGroup.add(leftRoof);
+
+    const rightRoof = new THREE.Mesh(roofGeo, shellMat);
+    rightRoof.add(new THREE.LineSegments(roofEdges, trussMat));
+    rightRoof.position.set(15.0 - halfW / 2, wallHeight + roofPeak / 2, 15.0);
+    rightRoof.rotation.z = -roofAngle;
+    presetGroup.add(rightRoof);
+
+    for(let z = 3.75; z <= 27.0; z += 7.5) {
+        createHangingLight(3.75, z, 6.25, 5.2);
+        createHangingLight(7.5, z, 7.5, 5.2);
+        createHangingLight(11.25, z, 6.25, 5.2);
+    }
+
+    camera.position.set(20, 20, 40);
+    controls.target.set(7.5, 2.5, 15);
+}
+
+
+// --- UI LOGIC ---
+document.addEventListener('DOMContentLoaded', () => {
+    const navLinks = document.querySelectorAll('.nav-link');
+    const tabContents = document.querySelectorAll('#main-content .tab-content');
+
+    function switchTab(tabId) {
+        navLinks.forEach(navLink => {
+            navLink.classList.remove('active');
+            if (navLink.getAttribute('data-tab') === tabId) {
+                navLink.classList.add('active');
+            }
+        });
+
+        tabContents.forEach(tabContent => {
+            tabContent.classList.remove('active');
+            if (tabContent.id === tabId) {
+                tabContent.classList.add('active');
+            }
+        });
+
+        if (tabId === 'tab-3d') {
+            setTimeout(() => {
+                window.dispatchEvent(new Event('resize'));
+                if (!scene.getObjectByName('presetGroup')) {
+                    loadMekongPreset();
+                }
+            }, 50);
+        }
+    }
+
+    navLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const tabId = link.getAttribute('data-tab');
+            switchTab(tabId);
+        });
+    });
+    
+    // Initial Load
+    const initialTab = 'tab-3d';
+    switchTab(initialTab);
 });
 
-// Floating Panel Logic
+
+// --- Floating Panel Logic ---
 const settingsBtn = document.getElementById('btn-settings');
 const closePanelBtn = document.getElementById('btn-close-panel');
 const floatingPanel = document.getElementById('floating-panel');
@@ -724,226 +929,40 @@ document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-// --- LOGIC KHO CÓ SẴN (KHO MÊ KÔNG) - LẤP KÍN MẶT TAM GIÁC DƯỚI MÁI ---
-const btnLoadMekong = document.getElementById('btn-load-mekong');
 
-if (btnLoadMekong) {
-    btnLoadMekong.addEventListener('click', () => {
-        // Cập nhật không gian kho 15x30x5
-        document.getElementById('inpL').value = 15.0;
-        document.getElementById('inpW').value = 30.0;
-        document.getElementById('inpH').value = 5.0;
-        updateRoom();
+// Switch between 3D and 2D modes
+const btn3d = document.getElementById('btn-mode-3d');
+const btn2d = document.getElementById('btn-mode-2d');
+const sceneContainer = document.getElementById('scene-container');
+const mapContainer = document.getElementById('map-2d-container');
 
-        let presetGroup = scene.getObjectByName('presetGroup');
-        if (!presetGroup) {
-            presetGroup = new THREE.Group();
-            presetGroup.name = 'presetGroup';
-            scene.add(presetGroup);
+btn3d.addEventListener('click', () => {
+    sceneContainer.style.display = 'block';
+    mapContainer.style.display = 'none';
+    axisContainer.style.display = 'block';
+    btn3d.classList.add('active');
+    btn2d.classList.remove('active');
+});
+
+btn2d.addEventListener('click', () => {
+    sceneContainer.style.display = 'none';
+    mapContainer.style.display = 'flex';
+    axisContainer.style.display = 'none';
+    btn2d.classList.add('active');
+    btn3d.classList.remove('active');
+    window.dispatchEvent(new Event('resize'));
+});
+
+// Collapsible sections
+const collapsibles = document.querySelectorAll('.collapsible');
+collapsibles.forEach(coll => {
+    coll.addEventListener('click', () => {
+        coll.classList.toggle('active');
+        const content = coll.nextElementSibling;
+        if (content.style.maxHeight && content.style.maxHeight !== 'fit-content') {
+            content.style.maxHeight = null;
+        } else {
+            content.style.maxHeight = content.scrollHeight + "px";
         }
-        while (presetGroup.children.length > 0) {
-            presetGroup.remove(presetGroup.children[0]);
-        }
-
-        // 1. CÁC HÀM TẠO VẬT THỂ CƠ BẢN
-        function createSolidBox(color, x, z, sizeX, sizeZ, sizeY) {
-            const geo = new THREE.BoxGeometry(sizeX, sizeY, sizeZ);
-            const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.7 });
-            const mesh = new THREE.Mesh(geo, mat);
-            const edges = new THREE.EdgesGeometry(geo);
-            const lineMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
-            mesh.add(new THREE.LineSegments(edges, lineMat));
-            mesh.position.set(x, sizeY / 2, z); 
-            presetGroup.add(mesh);
-        }
-
-        function createDetailedRack(x, z, sizeX, bayLength, bays, sizeY, tiers = 3, hasBoxes = false) {
-            const rackGroup = new THREE.Group();
-            const frameMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.6 }); 
-            const shelfMat = new THREE.MeshStandardMaterial({ color: 0xff6600, roughness: 0.5 }); 
-            const boxMat = new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }); 
-            const frameThick = 0.08, shelfThick = 0.05; 
-            const bottomTierY = sizeY * 0.15, topTierY = sizeY * 0.85; 
-            const tierSpacing = (topTierY - bottomTierY) / (tiers - 1); 
-            const totalZ = bays * bayLength;
-
-            for (let j = 0; j <= bays; j++) {
-                const isProtruding = (j % 2 === 0); 
-                const pH = isProtruding ? sizeY : topTierY + shelfThick / 2; 
-                const pillarGeo = new THREE.BoxGeometry(frameThick, pH, frameThick);
-                const pZ = -totalZ/2 + j * bayLength;
-                const pX_arr = [sizeX/2 - frameThick/2, -sizeX/2 + frameThick/2];
-                for (let px of pX_arr) {
-                    const pillar = new THREE.Mesh(pillarGeo, frameMat);
-                    pillar.position.set(px, pH / 2, pZ); 
-                    rackGroup.add(pillar);
-                }
-            }
-
-            const shelfGeo = new THREE.BoxGeometry(sizeX, shelfThick, bayLength);
-            const shelfEdges = new THREE.EdgesGeometry(shelfGeo);
-            const shelfLineMat = new THREE.LineBasicMaterial({ color: 0x552200, linewidth: 1 }); 
-            const boxHeight = tierSpacing * 0.65;
-            const boxGeo = new THREE.BoxGeometry(sizeX * 0.75, boxHeight, bayLength * 0.8);
-            const boxEdges = new THREE.EdgesGeometry(boxGeo);
-            const boxLineMat = new THREE.LineBasicMaterial({ color: 0x5c4033, linewidth: 1 }); 
-
-            for (let j = 0; j < bays; j++) {
-                const shelfZ = -totalZ/2 + j * bayLength + bayLength/2;
-                for (let i = 0; i < tiers; i++) {
-                    const shelf = new THREE.Mesh(shelfGeo, shelfMat);
-                    shelf.add(new THREE.LineSegments(shelfEdges, shelfLineMat));
-                    const tierY = bottomTierY + i * tierSpacing;
-                    shelf.position.set(0, tierY, shelfZ);
-                    rackGroup.add(shelf);
-                    if (hasBoxes) {
-                        const boxMesh = new THREE.Mesh(boxGeo, boxMat);
-                        boxMesh.add(new THREE.LineSegments(boxEdges, boxLineMat));
-                        boxMesh.position.set(0, tierY + (shelfThick / 2) + (boxHeight / 2), shelfZ);
-                        rackGroup.add(boxMesh);
-                    }
-                }
-            }
-            rackGroup.position.set(x, 0, z);
-            presetGroup.add(rackGroup);
-        }
-
-        // --- HÀM TẠO ĐÈN TRẦN ---
-        function createHangingLight(x, z, startY, endY) {
-            const lightGroup = new THREE.Group();
-            
-            const wireLen = startY - endY;
-            const wireGeo = new THREE.CylinderGeometry(0.015, 0.015, wireLen);
-            const wireMat = new THREE.MeshBasicMaterial({ color: 0x333333 });
-            const wire = new THREE.Mesh(wireGeo, wireMat);
-            wire.position.set(0, endY + wireLen/2, 0); 
-            lightGroup.add(wire);
-
-            const shadeGeo = new THREE.ConeGeometry(0.25, 0.3, 16);
-            const shadeMat = new THREE.MeshStandardMaterial({ color: 0x71717a, roughness: 0.4 }); 
-            const shade = new THREE.Mesh(shadeGeo, shadeMat);
-            shade.position.set(0, endY, 0);
-            lightGroup.add(shade);
-
-            const bulbGeo = new THREE.SphereGeometry(0.12, 16, 16);
-            const bulbMat = new THREE.MeshBasicMaterial({ color: 0xfffbeb }); 
-            const bulb = new THREE.Mesh(bulbGeo, bulbMat);
-            bulb.position.set(0, endY - 0.1, 0);
-            lightGroup.add(bulb);
-
-            lightGroup.position.set(x, 0, z);
-            presetGroup.add(lightGroup);
-        }
-
-        // --- KHỞI TẠO NỘI THẤT KHO ---
-        const rackWidth = 1.0; 
-        const lowHeight = 2.8; 
-        const highHeight = 3.0; 
-
-        // 1. Dãy thấp & Băng chuyền & Dãy cao
-        for(let i = 0; i < 3; i++) {
-            const currentZ = 3.4 + i * 4.3; 
-            createDetailedRack(2.4, currentZ, rackWidth, 1.0, 4, lowHeight, 3, false); 
-            createDetailedRack(6.4, currentZ, rackWidth, 1.0, 4, lowHeight, 3, false); 
-        }
-        createSolidBox(0x9ca3af, 4.4, 7.7, 0.8, 12.6, 0.5);
-        createDetailedRack(7.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true);
-        createDetailedRack(14.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true);
-
-        // 2. Hệ thống cửa
-        const lineMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
-        const wingGeo = new THREE.BoxGeometry(1.0, 2.5, 0.1);
-        const commonDoorMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.5 });
-        
-        const wingEdges = new THREE.EdgesGeometry(wingGeo);
-        const leftWing = new THREE.Mesh(wingGeo, commonDoorMat); leftWing.add(new THREE.LineSegments(wingEdges, lineMat));
-        const rightWing = new THREE.Mesh(wingGeo, commonDoorMat); rightWing.add(new THREE.LineSegments(wingEdges, lineMat));
-        leftWing.position.set(1.0, 1.25, 29.95); presetGroup.add(leftWing);
-        rightWing.position.set(2.0, 1.25, 29.95); presetGroup.add(rightWing);
-
-        const rollGeo = new THREE.BoxGeometry(3.5, 3.5, 0.1);
-        const rollEdges = new THREE.EdgesGeometry(rollGeo);
-        const rollDoor1 = new THREE.Mesh(rollGeo, commonDoorMat); rollDoor1.add(new THREE.LineSegments(rollEdges, lineMat));
-        const rollDoor2 = new THREE.Mesh(rollGeo, commonDoorMat); rollDoor2.add(new THREE.LineSegments(rollEdges, lineMat));
-        rollDoor1.position.set(7.5, 1.75, 29.95); presetGroup.add(rollDoor1);
-        rollDoor2.position.set(12.0, 1.75, 29.95); presetGroup.add(rollDoor2);
-
-        // --- 3. DỰNG MÁI NHÀ CHỮ A, CÁC BỨC TƯỜNG VÀ MẶT TAM GIÁC ---
-        const shellMat = new THREE.MeshStandardMaterial({ 
-            color: 0xe5e7eb, roughness: 0.2, transparent: true, opacity: 0.3, side: THREE.DoubleSide 
-        });
-
-        const wallThick = 0.05;
-        const wallHeight = 5.0;
-        
-        // 3.1. Dựng 4 bức tường
-        const leftWall = new THREE.Mesh(new THREE.BoxGeometry(wallThick, wallHeight, 30.0), shellMat);
-        leftWall.position.set(0, wallHeight/2, 15.0);
-        presetGroup.add(leftWall);
-
-        const rightWall = new THREE.Mesh(new THREE.BoxGeometry(wallThick, wallHeight, 30.0), shellMat);
-        rightWall.position.set(15.0, wallHeight/2, 15.0);
-        presetGroup.add(rightWall);
-
-        const backWall = new THREE.Mesh(new THREE.BoxGeometry(15.0, wallHeight, wallThick), shellMat);
-        backWall.position.set(7.5, wallHeight/2, 0);
-        presetGroup.add(backWall);
-
-        const frontWall = new THREE.Mesh(new THREE.BoxGeometry(15.0, wallHeight, wallThick), shellMat);
-        frontWall.position.set(7.5, wallHeight/2, 30.0);
-        presetGroup.add(frontWall);
-
-        // 3.2. Lấp khe hở hình tam giác (Gable) ở hai đầu mái
-        const gableShape = new THREE.Shape();
-        gableShape.moveTo(-7.5, 0); // Góc dưới cùng bên trái
-        gableShape.lineTo(7.5, 0);  // Góc dưới cùng bên phải
-        gableShape.lineTo(0, 2.5);  // Đỉnh chóp của mái nhà (cao 2.5m)
-        gableShape.lineTo(-7.5, 0); // Vòng về điểm bắt đầu
-        
-        const gableGeo = new THREE.ExtrudeGeometry(gableShape, { depth: wallThick, bevelEnabled: false });
-        gableGeo.translate(0, 0, -wallThick / 2); // Căn lề giữa để vừa khớp độ dày của tường
-
-        // Tam giác lấp mặt sau kho
-        const backGable = new THREE.Mesh(gableGeo, shellMat);
-        backGable.position.set(7.5, wallHeight, 0); 
-        presetGroup.add(backGable);
-
-        // Tam giác lấp mặt trước kho
-        const frontGable = new THREE.Mesh(gableGeo, shellMat);
-        frontGable.position.set(7.5, wallHeight, 30.0); 
-        presetGroup.add(frontGable);
-
-        // 3.3. Dựng mái nhà
-        const roofPeak = 2.5;  
-        const halfW = 7.5;     
-        const slantLen = Math.sqrt(halfW * halfW + roofPeak * roofPeak); 
-        const roofAngle = Math.atan2(roofPeak, halfW);
-
-        const roofGeo = new THREE.BoxGeometry(slantLen, 0.05, 30.0, 1, 1, 8); 
-        const roofEdges = new THREE.EdgesGeometry(roofGeo);
-        const trussMat = new THREE.LineBasicMaterial({ color: 0x374151, linewidth: 2 }); 
-
-        const leftRoof = new THREE.Mesh(roofGeo, shellMat);
-        leftRoof.add(new THREE.LineSegments(roofEdges, trussMat));
-        leftRoof.position.set(halfW / 2, wallHeight + roofPeak / 2, 15.0);
-        leftRoof.rotation.z = roofAngle;
-        presetGroup.add(leftRoof);
-
-        const rightRoof = new THREE.Mesh(roofGeo, shellMat);
-        rightRoof.add(new THREE.LineSegments(roofEdges, trussMat));
-        rightRoof.position.set(15.0 - halfW / 2, wallHeight + roofPeak / 2, 15.0);
-        rightRoof.rotation.z = -roofAngle;
-        presetGroup.add(rightRoof);
-
-        // --- 4. RẢI HỆ THỐNG ĐÈN TRẦN ---
-        for(let z = 3.75; z <= 27.0; z += 7.5) {
-            createHangingLight(3.75, z, 6.25, 5.2);
-            createHangingLight(7.5, z, 7.5, 5.2);
-            createHangingLight(11.25, z, 6.25, 5.2);
-        }
-
-        // Chỉnh góc Camera
-        camera.position.set(20, 20, 40);
-        controls.target.set(7.5, 2.5, 15);
     });
-}
+});
