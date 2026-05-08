@@ -284,3 +284,87 @@ function calculateAccuracy(distArray, pos) {
 
 const PORT = 3000;
 server.listen(PORT, () => console.log(`🚀 3D Server running on http://localhost:${PORT}`));
+// server.js
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const path = require('path');
+const { loadDB, saveDB } = require('./public/db.js'); // Đảm bảo đường dẫn tới db.js đúng
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
+app.use(express.json());
+// Phục vụ các file tĩnh (index.html, style.css, warehouse.js) từ thư mục public
+app.use(express.static(path.join(__dirname, 'public'))); 
+
+let db = loadDB();
+
+// Hàm ghi log tự động
+function addAudit(user, action, entity, data) {
+    db.auditLog.push({ timestamp: new Date().toISOString(), user, action, entity, data });
+    saveDB(db);
+}
+
+// --- API THỐNG KÊ ---
+app.get('/api/stats', (req, res) => {
+    const totalProducts = db.products.length;
+    const totalValue = db.products.reduce((sum, p) => sum + (p.price * p.quantity), 0);
+    const lowStockCount = db.products.filter(p => p.minQuantity > 0 && p.quantity <= p.minQuantity).length;
+    res.json({ totalProducts, totalValue, lowStockCount });
+});
+
+// --- API HÀNG HÓA ---
+app.get('/api/products', (req, res) => res.json(db.products));
+app.post('/api/products', (req, res) => {
+    const product = { id: 'SKU-' + Date.now(), ...req.body };
+    db.products.push(product);
+    addAudit('Admin', 'CREATE', 'product', product);
+    saveDB(db);
+    io.emit('products_updated', db.products);
+    res.json(product);
+});
+
+// --- API PHIẾU NHẬP ---
+app.get('/api/receipts', (req, res) => res.json(db.receipts));
+app.post('/api/receipts', (req, res) => {
+    const receipt = { id: 'PN-' + Date.now(), createdAt: new Date().toISOString(), ...req.body };
+    let total = 0;
+    receipt.items.forEach(item => {
+        total += item.quantity * item.price;
+        const p = db.products.find(x => x.id === item.productId);
+        if (p) p.quantity += item.quantity; // Cộng dồn tồn kho
+    });
+    receipt.total = total;
+    db.receipts.push(receipt);
+    addAudit('Admin', 'IMPORT', 'receipt', receipt);
+    saveDB(db);
+    io.emit('products_updated', db.products);
+    res.json(receipt);
+});
+
+// --- API PHIẾU XUẤT ---
+app.get('/api/deliveries', (req, res) => res.json(db.deliveries));
+app.post('/api/deliveries', (req, res) => {
+    const delivery = { id: 'PX-' + Date.now(), createdAt: new Date().toISOString(), ...req.body };
+    let total = 0;
+    delivery.items.forEach(item => {
+        total += item.quantity * item.price;
+        const p = db.products.find(x => x.id === item.productId);
+        if (p) p.quantity = Math.max(0, p.quantity - item.quantity); // Trừ tồn kho
+    });
+    delivery.total = total;
+    db.deliveries.push(delivery);
+    addAudit('Admin', 'EXPORT', 'delivery', delivery);
+    saveDB(db);
+    io.emit('products_updated', db.products);
+    res.json(delivery);
+});
+
+// --- API NHẬT KÝ ---
+app.get('/api/audit', (req, res) => res.json(db.auditLog));
+
+server.listen(3000, () => {
+    console.log('🔥 Smart Warehouse đang chạy tại: http://localhost:3000');
+});
