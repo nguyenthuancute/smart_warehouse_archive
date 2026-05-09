@@ -5,19 +5,43 @@ const { Server } = require("socket.io");
 const mqtt = require('mqtt');
 const bodyParser = require('body-parser');
 const path = require('path');
-const { loadDB, saveDB } = require('./public/db.js');
+const fs = require('fs'); // Thêm thư viện File System có sẵn của Node.js
 
-// --- CẤU HÌNH ---
+// --- CẤU HÌNH SERVER ---
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Cấu hình Middleware
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public'))); 
 
-// --- DATABASE KHO ---
+// --- DATABASE KHO (TÍCH HỢP TRỰC TIẾP) ---
+const dbFile = path.join(__dirname, 'db.json');
+
+// Hàm đọc dữ liệu từ file
+function loadDB() {
+    try {
+        if (fs.existsSync(dbFile)) {
+            const data = fs.readFileSync(dbFile, 'utf8');
+            return JSON.parse(data);
+        }
+    } catch (err) {
+        console.error("⚠️ Lỗi đọc file DB, tạo DB mới:", err);
+    }
+    // Trả về cấu trúc mặc định nếu file chưa tồn tại
+    return { products: [], receipts: [], deliveries: [], auditLog: [] };
+}
+
+// Hàm ghi dữ liệu vào file
+function saveDB(dbData) {
+    try {
+        fs.writeFileSync(dbFile, JSON.stringify(dbData, null, 2), 'utf8');
+    } catch (err) {
+        console.error("⚠️ Lỗi lưu file DB:", err);
+    }
+}
+
 let db = loadDB();
 
 function addAudit(user, action, entity, data) {
@@ -82,13 +106,19 @@ io.on('connection', (socket) => {
 const MQTT_HOST = '127.0.0.1';
 const MQTT_PORT = 1883;
 
+// Lưu ý: Trên Render sẽ không có sẵn MQTT broker ở localhost (127.0.0.1)
+// Nếu bạn dùng broker bên ngoài (như HiveMQ, EMQX), hãy thay đổi IP/Host ở trên.
 const client = mqtt.connect(`mqtt://${MQTT_HOST}`, {
     port: MQTT_PORT
 });
 
 client.on('connect', () => {
-    console.log('✅ MQTT Local Connected');
+    console.log('✅ MQTT Connected');
     client.subscribe('kho_thong_minh/tags/+');
+});
+
+client.on('error', (err) => {
+    console.log('⚠️ MQTT Connection Error (Bỏ qua nếu bạn không chạy Broker trên Render):', err.message);
 });
 
 client.on('message', async (topic, message) => {
@@ -97,7 +127,7 @@ client.on('message', async (topic, message) => {
         const data = JSON.parse(message.toString());
         const dists = data.distances;
 
-        if (anchors.length < 4) return; // Multilateration requires at least 4 anchors
+        if (anchors.length < 4) return;
 
         const distArray = Object.keys(dists).map(idx => ({
             anchor: anchors[parseInt(idx)],
@@ -133,7 +163,6 @@ setInterval(() => {
 
 // --- API QUẢN LÝ KHO HÀNG ---
 
-// API Thống kê
 app.get('/api/stats', (req, res) => {
     const totalProducts = db.products.length;
     const totalValue = db.products.reduce((sum, p) => sum + (p.price * p.quantity), 0);
@@ -141,7 +170,6 @@ app.get('/api/stats', (req, res) => {
     res.json({ totalProducts, totalValue, lowStockCount });
 });
 
-// API Hàng hóa
 app.get('/api/products', (req, res) => res.json(db.products));
 app.post('/api/products', (req, res) => {
     const product = { id: 'SKU-' + Date.now(), ...req.body };
@@ -152,7 +180,6 @@ app.post('/api/products', (req, res) => {
     res.json(product);
 });
 
-// API Phiếu nhập
 app.get('/api/receipts', (req, res) => res.json(db.receipts));
 app.post('/api/receipts', (req, res) => {
     const receipt = { id: 'PN-' + Date.now(), createdAt: new Date().toISOString(), ...req.body };
@@ -160,7 +187,7 @@ app.post('/api/receipts', (req, res) => {
     receipt.items.forEach(item => {
         total += item.quantity * item.price;
         const p = db.products.find(x => x.id === item.productId);
-        if (p) p.quantity += item.quantity; // Cộng dồn tồn kho
+        if (p) p.quantity += item.quantity;
     });
     receipt.total = total;
     db.receipts.push(receipt);
@@ -170,7 +197,6 @@ app.post('/api/receipts', (req, res) => {
     res.json(receipt);
 });
 
-// API Phiếu xuất
 app.get('/api/deliveries', (req, res) => res.json(db.deliveries));
 app.post('/api/deliveries', (req, res) => {
     const delivery = { id: 'PX-' + Date.now(), createdAt: new Date().toISOString(), ...req.body };
@@ -178,7 +204,7 @@ app.post('/api/deliveries', (req, res) => {
     delivery.items.forEach(item => {
         total += item.quantity * item.price;
         const p = db.products.find(x => x.id === item.productId);
-        if (p) p.quantity = Math.max(0, p.quantity - item.quantity); // Trừ tồn kho
+        if (p) p.quantity = Math.max(0, p.quantity - item.quantity);
     });
     delivery.total = total;
     db.deliveries.push(delivery);
@@ -188,7 +214,6 @@ app.post('/api/deliveries', (req, res) => {
     res.json(delivery);
 });
 
-// API Nhật ký
 app.get('/api/audit', (req, res) => res.json(db.auditLog));
 
 
@@ -224,7 +249,7 @@ function mat_multiply(A, B) {
 function mat_invert_3x3(m) {
     const [[a, b, c], [d, e, f], [g, h, i]] = m;
     const det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
-    if (det === 0) return null; // Not invertible
+    if (det === 0) return null;
     const invDet = 1.0 / det;
     const result = [
         [(e * i - f * h) * invDet, (c * h - b * i) * invDet, (b * f - c * e) * invDet],
@@ -295,17 +320,13 @@ function multilateration_linear(distArray) {
         const A_T_A = mat_multiply(A_T, A);
         const A_T_A_inv = mat_invert_3x3(A_T_A);
 
-        if (!A_T_A_inv) {
-             console.error("Matrix A^T*A is not invertible. Check anchor geometry.");
-             return null;
-        }
+        if (!A_T_A_inv) return null;
 
         const A_T_b = mat_multiply(A_T, b);
         const pos = mat_multiply(A_T_A_inv, A_T_b);
         
         return { x: pos[0], y: pos[1], z: pos[2] };
     } catch (e) {
-        console.error("Error during linear multilateration calculation:", e);
         return null;
     }
 }
@@ -334,7 +355,6 @@ function calculateAccuracy(distArray, pos) {
 }
 
 // --- KHỞI ĐỘNG SERVER ---
-// Trên Render, biến môi trường process.env.PORT thường được cung cấp tự động
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`🔥 Smart Warehouse & 3D Server đang chạy tại port: ${PORT}`);
