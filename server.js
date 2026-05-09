@@ -1,19 +1,29 @@
-
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require("socket.io");
 const mqtt = require('mqtt');
 const bodyParser = require('body-parser');
+const path = require('path');
+const { loadDB, saveDB } = require('./public/db.js');
 
 // --- CẤU HÌNH ---
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.static('public'));
+// Cấu hình Middleware
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, 'public'))); 
+
+// --- DATABASE KHO ---
+let db = loadDB();
+
+function addAudit(user, action, entity, data) {
+    db.auditLog.push({ timestamp: new Date().toISOString(), user, action, entity, data });
+    saveDB(db);
+}
 
 // --- KALMAN FILTER CLASS ---
 class KalmanFilter {
@@ -44,7 +54,7 @@ class KalmanFilter {
     }
 }
 
-// --- DỮ LIỆU BỘ NHỚ ---
+// --- DỮ LIỆU BỘ NHỚ (3D Positioning) ---
 let anchors = [];
 let tagPositions = {};
 let kalmanFilters = {};
@@ -112,7 +122,7 @@ client.on('message', async (topic, message) => {
     } catch (e) { console.error('MQTT Message Error:', e); }
 });
 
-// --- SERVER-SIDE UPDATE LOOP ---
+// --- SERVER-SIDE UPDATE LOOP (3D) ---
 const UPDATE_INTERVAL = 33; // ~30 FPS
 setInterval(() => {
     if (Object.keys(tagPositions).length > 0) {
@@ -120,14 +130,75 @@ setInterval(() => {
     }
 }, UPDATE_INTERVAL);
 
-// --- MATRIX HELPER FUNCTIONS ---
+
+// --- API QUẢN LÝ KHO HÀNG ---
+
+// API Thống kê
+app.get('/api/stats', (req, res) => {
+    const totalProducts = db.products.length;
+    const totalValue = db.products.reduce((sum, p) => sum + (p.price * p.quantity), 0);
+    const lowStockCount = db.products.filter(p => p.minQuantity > 0 && p.quantity <= p.minQuantity).length;
+    res.json({ totalProducts, totalValue, lowStockCount });
+});
+
+// API Hàng hóa
+app.get('/api/products', (req, res) => res.json(db.products));
+app.post('/api/products', (req, res) => {
+    const product = { id: 'SKU-' + Date.now(), ...req.body };
+    db.products.push(product);
+    addAudit('Admin', 'CREATE', 'product', product);
+    saveDB(db);
+    io.emit('products_updated', db.products);
+    res.json(product);
+});
+
+// API Phiếu nhập
+app.get('/api/receipts', (req, res) => res.json(db.receipts));
+app.post('/api/receipts', (req, res) => {
+    const receipt = { id: 'PN-' + Date.now(), createdAt: new Date().toISOString(), ...req.body };
+    let total = 0;
+    receipt.items.forEach(item => {
+        total += item.quantity * item.price;
+        const p = db.products.find(x => x.id === item.productId);
+        if (p) p.quantity += item.quantity; // Cộng dồn tồn kho
+    });
+    receipt.total = total;
+    db.receipts.push(receipt);
+    addAudit('Admin', 'IMPORT', 'receipt', receipt);
+    saveDB(db);
+    io.emit('products_updated', db.products);
+    res.json(receipt);
+});
+
+// API Phiếu xuất
+app.get('/api/deliveries', (req, res) => res.json(db.deliveries));
+app.post('/api/deliveries', (req, res) => {
+    const delivery = { id: 'PX-' + Date.now(), createdAt: new Date().toISOString(), ...req.body };
+    let total = 0;
+    delivery.items.forEach(item => {
+        total += item.quantity * item.price;
+        const p = db.products.find(x => x.id === item.productId);
+        if (p) p.quantity = Math.max(0, p.quantity - item.quantity); // Trừ tồn kho
+    });
+    delivery.total = total;
+    db.deliveries.push(delivery);
+    addAudit('Admin', 'EXPORT', 'delivery', delivery);
+    saveDB(db);
+    io.emit('products_updated', db.products);
+    res.json(delivery);
+});
+
+// API Nhật ký
+app.get('/api/audit', (req, res) => res.json(db.auditLog));
+
+
+// --- MATRIX & THUẬT TOÁN HELPER FUNCTIONS ---
 function mat_transpose(matrix) {
     if (!matrix || matrix.length === 0) return [];
     return matrix[0].map((_, colIndex) => matrix.map(row => row[colIndex]));
 }
 
 function mat_multiply(A, B) {
-    // Handle matrix-vector multiplication
     if (B.every(el => typeof el === 'number')) {
         if (A[0].length !== B.length) throw new Error("Matrix dimensions are not compatible for multiplication.");
         let result = new Array(A.length).fill(0);
@@ -138,7 +209,6 @@ function mat_multiply(A, B) {
         }
         return result;
     }
-    // Handle matrix-matrix multiplication
     if (A[0].length !== B.length) throw new Error("Matrix dimensions are not compatible for multiplication.");
     let result = new Array(A.length).fill(0).map(() => new Array(B[0].length).fill(0));
     for (let i = 0; i < A.length; i++) {
@@ -164,23 +234,14 @@ function mat_invert_3x3(m) {
     return result;
 }
 
-// --- THUẬT TOÁN ĐỊNH VỊ (MULTILATERATION) ---
-// This new implementation uses gradient descent to refine the position estimate,
-// which generally improves accuracy, especially with more anchors.
 function multilateration(distArray, { iterations = 20, learningRate = 0.01 } = {}) {
-    // Get an initial estimate using the linear method
     const initialGuess = multilateration_linear(distArray);
-    if (!initialGuess) {
-        return null;
-    }
+    if (!initialGuess) return null;
 
     let currentPosition = { ...initialGuess };
 
-    // Iteratively refine the position using Gradient Descent
     for (let iter = 0; iter < iterations; iter++) {
         let gradient = { x: 0, y: 0, z: 0 };
-
-        // Calculate the gradient of the objective function (sum of squared errors)
         for (const item of distArray) {
             const { anchor, distance } = item;
             const calculatedDist = Math.sqrt(
@@ -189,17 +250,14 @@ function multilateration(distArray, { iterations = 20, learningRate = 0.01 } = {
                 (currentPosition.z - anchor.z) ** 2
             );
 
-            if (calculatedDist < 1e-6) continue; // Avoid division by zero
+            if (calculatedDist < 1e-6) continue;
 
-            // Derivative of squared error: 2 * (calculatedDist - distance) * (derivative of calculatedDist)
-            // Derivative of calculatedDist wrt x is (currentPosition.x - anchor.x) / calculatedDist
             const commonFactor = 2 * (1 - distance / calculatedDist);
             gradient.x += commonFactor * (currentPosition.x - anchor.x);
             gradient.y += commonFactor * (currentPosition.y - anchor.y);
             gradient.z += commonFactor * (currentPosition.z - anchor.z);
         }
 
-        // Update the position by moving against the gradient
         currentPosition.x -= learningRate * gradient.x;
         currentPosition.y -= learningRate * gradient.y;
         currentPosition.z -= learningRate * gradient.z;
@@ -208,11 +266,8 @@ function multilateration(distArray, { iterations = 20, learningRate = 0.01 } = {
     return currentPosition;
 }
 
-// Solves the linearized system of equations to get a good initial guess.
 function multilateration_linear(distArray) {
-    if (distArray.length < 4) {
-        return null;
-    }
+    if (distArray.length < 4) return null;
 
     const refAnchor = distArray[distArray.length - 1].anchor;
     const refDist = distArray[distArray.length - 1].distance;
@@ -232,9 +287,7 @@ function multilateration_linear(distArray) {
         ]);
         
         const anchorSq = anchor.x ** 2 + anchor.y ** 2 + anchor.z ** 2;
-        b.push(
-            dist ** 2 - refDist ** 2 - anchorSq + refAnchorSq
-        );
+        b.push(dist ** 2 - refDist ** 2 - anchorSq + refAnchorSq);
     }
 
     try {
@@ -251,17 +304,15 @@ function multilateration_linear(distArray) {
         const pos = mat_multiply(A_T_A_inv, A_T_b);
         
         return { x: pos[0], y: pos[1], z: pos[2] };
-
     } catch (e) {
         console.error("Error during linear multilateration calculation:", e);
         return null;
     }
 }
 
-
 function isValidPosition(pos) {
     if (!pos || isNaN(pos.x) || isNaN(pos.y) || isNaN(pos.z)) return false;
-    const buffer = 5; // Increase buffer to be more tolerant
+    const buffer = 5;
     if (pos.x < -buffer || pos.x > roomConfig.length + buffer) return false;
     if (pos.y < -buffer || pos.y > roomConfig.width + buffer) return false;
     if (pos.z < -buffer || pos.z > roomConfig.height + buffer) return false;
@@ -282,89 +333,9 @@ function calculateAccuracy(distArray, pos) {
     return totalError / distArray.length;
 }
 
-const PORT = 3000;
-server.listen(PORT, () => console.log(`🚀 3D Server running on http://localhost:${PORT}`));
-// server.js
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const path = require('path');
-const { loadDB, saveDB } = require('./public/db.js'); // Đảm bảo đường dẫn tới db.js đúng
-
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
-
-app.use(express.json());
-// Phục vụ các file tĩnh (index.html, style.css, warehouse.js) từ thư mục public
-app.use(express.static(path.join(__dirname, 'public'))); 
-
-let db = loadDB();
-
-// Hàm ghi log tự động
-function addAudit(user, action, entity, data) {
-    db.auditLog.push({ timestamp: new Date().toISOString(), user, action, entity, data });
-    saveDB(db);
-}
-
-// --- API THỐNG KÊ ---
-app.get('/api/stats', (req, res) => {
-    const totalProducts = db.products.length;
-    const totalValue = db.products.reduce((sum, p) => sum + (p.price * p.quantity), 0);
-    const lowStockCount = db.products.filter(p => p.minQuantity > 0 && p.quantity <= p.minQuantity).length;
-    res.json({ totalProducts, totalValue, lowStockCount });
-});
-
-// --- API HÀNG HÓA ---
-app.get('/api/products', (req, res) => res.json(db.products));
-app.post('/api/products', (req, res) => {
-    const product = { id: 'SKU-' + Date.now(), ...req.body };
-    db.products.push(product);
-    addAudit('Admin', 'CREATE', 'product', product);
-    saveDB(db);
-    io.emit('products_updated', db.products);
-    res.json(product);
-});
-
-// --- API PHIẾU NHẬP ---
-app.get('/api/receipts', (req, res) => res.json(db.receipts));
-app.post('/api/receipts', (req, res) => {
-    const receipt = { id: 'PN-' + Date.now(), createdAt: new Date().toISOString(), ...req.body };
-    let total = 0;
-    receipt.items.forEach(item => {
-        total += item.quantity * item.price;
-        const p = db.products.find(x => x.id === item.productId);
-        if (p) p.quantity += item.quantity; // Cộng dồn tồn kho
-    });
-    receipt.total = total;
-    db.receipts.push(receipt);
-    addAudit('Admin', 'IMPORT', 'receipt', receipt);
-    saveDB(db);
-    io.emit('products_updated', db.products);
-    res.json(receipt);
-});
-
-// --- API PHIẾU XUẤT ---
-app.get('/api/deliveries', (req, res) => res.json(db.deliveries));
-app.post('/api/deliveries', (req, res) => {
-    const delivery = { id: 'PX-' + Date.now(), createdAt: new Date().toISOString(), ...req.body };
-    let total = 0;
-    delivery.items.forEach(item => {
-        total += item.quantity * item.price;
-        const p = db.products.find(x => x.id === item.productId);
-        if (p) p.quantity = Math.max(0, p.quantity - item.quantity); // Trừ tồn kho
-    });
-    delivery.total = total;
-    db.deliveries.push(delivery);
-    addAudit('Admin', 'EXPORT', 'delivery', delivery);
-    saveDB(db);
-    io.emit('products_updated', db.products);
-    res.json(delivery);
-});
-
-// --- API NHẬT KÝ ---
-app.get('/api/audit', (req, res) => res.json(db.auditLog));
-
-server.listen(3000, () => {
-    console.log('🔥 Smart Warehouse đang chạy tại: http://localhost:3000');
+// --- KHỞI ĐỘNG SERVER ---
+// Trên Render, biến môi trường process.env.PORT thường được cung cấp tự động
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`🔥 Smart Warehouse & 3D Server đang chạy tại port: ${PORT}`);
 });
