@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -66,7 +65,7 @@
                         <button id="btn-settings">Cài đặt</button>
                         <div id="mode-switcher">
                             <button id="btn-mode-3d" class="btn-mode active">3D</button>
-                            <button id="btn-mode-2d" class="btn-mode">2D</button>
+<button id="btn-mode-2d" class="btn-mode">2D</button>
                         </div>
                     </div>
                 </div>
@@ -115,7 +114,7 @@
                             <!-- Tag Real-time -->
                             <div class="panel-section">
                                 <h2 class="collapsible active">Tags Real-time <button id="btn-record-log" class="btn-secondary sm">Record</button></h2>
-                                <div class="collapsible-content" style="max-height: fit-content;">
+<div class="collapsible-content" style="max-height: fit-content;">
                                     <div class="table-container">
                                         <table id="tag-table">
                                             <thead><tr><th>ID</th><th>X</th><th>Y</th><th>Z</th><th>+/-</th></tr></thead>
@@ -176,7 +175,7 @@
                     </div>
                     <button class="btn-primary" id="btn-add-forklift">Thêm xe nâng</button>
                 </div>
-                <div class="search-row">
+<div class="search-row">
                     <input type="text" id="forklift-search" placeholder="Tìm kiếm theo ID xe nâng...">
                 </div>
                 <div class="table-wrapper">
@@ -241,7 +240,7 @@
                     <div>
                         <h2>Phiếu nhập kho</h2>
                         <p>Tạo và quản lý các phiếu nhập kho.</p>
-                    </div>
+</div>
                     <button class="btn-primary" id="btn-create-receipt">Tạo phiếu nhập</button>
                 </div>
                  <div class="table-wrapper">
@@ -310,17 +309,214 @@
                         </thead>
                         <tbody id="log-tbody"></tbody>
                     </table>
-                </div>
+</div>
             </div>
         </div>
 
+    </div>
+
+    <!-- ══ MODAL: THÊM NHÂN VIÊN ══ -->
+    <div id="modal-employee" class="modal-overlay">
+        <div class="modal-box">
+            <button class="modal-close" data-modal="modal-employee">&times;</button>
+            <h3>Thêm nhân viên mới</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Tên nhân viên *</label>
+                    <input type="text" id="emp-name" placeholder="Nguyễn Văn A">
+                </div>
+                <div class="form-group">
+                    <label>Chức vụ *</label>
+                    <input type="text" id="emp-role" placeholder="Nhân viên kho">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Trạng thái</label>
+                    <select id="emp-status">
+                        <option value="active">Đang làm việc</option>
+                        <option value="inactive">Nghỉ</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Tag ID</label>
+                    <input type="text" id="emp-tag" placeholder="TAG-001">
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-secondary-outline" data-modal="modal-employee">Hủy</button>
+                <button class="btn-primary" id="btn-save-employee">Lưu nhân viên</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ MODAL: THÊM XE NÂNG ══ -->
+    <div id="modal-forklift" class="modal-overlay">
+        <div class="modal-box">
+            <button class="modal-close" data-modal="modal-forklift">&times;</button>
+            <h3>Thêm xe nâng mới</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>ID Xe nâng *</label>
+                    <input type="text" id="fl-id" placeholder="XN-001">
+                </div>
+                <div class="form-group">
+                    <label>Loại xe *</label>
+                    <select id="fl-type">
+                        <option>Xe nâng điện</option>
+                        <option>Xe nâng dầu</option>
+                        <option>Xe nâng tay</option>
+                        <option>Xe nâng reach truck</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Trạng thái</label>
+                    <select id="fl-status">
+                        <option value="active">Đang hoạt động</option>
+                        <option value="inactive">Bảo trì</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Tag ID</label>
+<input type="text" id="fl-tag" placeholder="TAG-F01">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Vị trí hiện tại</label>
+                <input type="text" id="fl-location" placeholder="Khu A - Cổng chính">
+            </div>
+            <div class="modal-actions">
+                <button class="btn-secondary-outline" data-modal="modal-forklift">Hủy</button>
+                <button class="btn-primary" id="btn-save-forklift">Lưu xe nâng</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ MODAL: THÊM SKU ══ -->
+    <div id="modal-sku" class="modal-overlay">
+        <div class="modal-box">
+            <button class="modal-close" data-modal="modal-sku">&times;</button>
+            <h3>Thêm hàng hóa (SKU) mới</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Mã SKU *</label>
+                    <input type="text" id="sku-code" placeholder="SKU-00001">
+                </div>
+                <div class="form-group">
+                    <label>Tên hàng hóa *</label>
+                    <input type="text" id="sku-name" placeholder="Tên sản phẩm">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Đơn vị tính (ĐVT)</label>
+                    <input type="text" id="sku-unit" placeholder="Thùng / Cái / Kg">
+                </div>
+                <div class="form-group">
+                    <label>Tồn kho</label>
+                    <input type="number" id="sku-stock" placeholder="0" min="0">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Tồn tối thiểu</label>
+                    <input type="number" id="sku-min-stock" placeholder="0" min="0">
+                </div>
+                <div class="form-group">
+                    <label>Đơn giá (VNĐ)</label>
+                    <input type="number" id="sku-price" placeholder="0" min="0">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Vị trí kho</label>
+                <input type="text" id="sku-location" placeholder="Kệ A1 - Tầng 2">
+            </div>
+            <div class="modal-actions">
+                <button class="btn-secondary-outline" data-modal="modal-sku">Hủy</button>
+                <button class="btn-primary" id="btn-save-sku">Lưu hàng hóa</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ MODAL: TẠO PHIẾU NHẬP ══ -->
+    <div id="modal-receipt" class="modal-overlay">
+        <div class="modal-box">
+            <button class="modal-close" data-modal="modal-receipt">&times;</button>
+            <h3>Tạo phiếu nhập kho</h3>
+            <div class="form-row">
+                <div class="form-group">
+<label>Mã phiếu *</label>
+                    <input type="text" id="rec-code" placeholder="PN-2026-001">
+                </div>
+                <div class="form-group">
+                    <label>Ngày tạo</label>
+                    <input type="date" id="rec-date">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Nhà cung cấp *</label>
+                <input type="text" id="rec-supplier" placeholder="Tên nhà cung cấp">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Trạng thái</label>
+                    <select id="rec-status">
+                        <option value="pending">Chờ xử lý</option>
+                        <option value="done">Hoàn thành</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Tổng giá trị (VNĐ)</label>
+                    <input type="number" id="rec-value" placeholder="0" min="0">
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-secondary-outline" data-modal="modal-receipt">Hủy</button>
+                <button class="btn-primary" id="btn-save-receipt">Tạo phiếu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ MODAL: TẠO PHIẾU XUẤT ══ -->
+    <div id="modal-delivery" class="modal-overlay">
+        <div class="modal-box">
+            <button class="modal-close" data-modal="modal-delivery">&times;</button>
+            <h3>Tạo phiếu xuất kho</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Mã phiếu *</label>
+                    <input type="text" id="del-code" placeholder="PX-2026-001">
+                </div>
+                <div class="form-group">
+                    <label>Ngày tạo</label>
+                    <input type="date" id="del-date">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Khách hàng *</label>
+                <input type="text" id="del-customer" placeholder="Tên khách hàng / công ty">
+            </div>
+            <div class="form-group">
+                <label>Trạng thái</label>
+                <select id="del-status">
+                    <option value="pending">Chờ xử lý</option>
+                    <option value="done">Hoàn thành</option>
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-secondary-outline" data-modal="modal-delivery">Hủy</button>
+                <button class="btn-primary" id="btn-save-delivery">Tạo phiếu</button>
+            </div>
+        </div>
     </div>
 
     <!-- Context Menu -->
     <ul id="context-menu" class="context-menu" style="display: none;">
         <li id="ctx-duplicate">Duplicate</li>
         <li id="ctx-delete">Delete</li>
-    </ul>
+</ul>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
     <script type="importmap">
