@@ -1,4 +1,3 @@
-
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
@@ -90,7 +89,7 @@ function selectObject(mesh, additive = false) {
 
 function deselectAllObjects() {
     selectedObjects.forEach(obj => {
-        if(obj) obj.material.color.set(0xaaaaaa)
+if(obj) obj.material.color.set(0xaaaaaa)
     });
     selectedObjects = [];
 }
@@ -178,8 +177,7 @@ document.getElementById('ctx-delete').addEventListener('click', () => {
         idsToDelete.forEach(index => {
             objectsData.splice(index, 1);
         });
-
-        deselectAllObjects();
+deselectAllObjects();
         renderObjectList();
         updateObjects3D();
     }
@@ -265,7 +263,7 @@ function interpolateTagPositions() {
     Object.keys(tagInterpolation).forEach(id => {
         const interp = tagInterpolation[id];
         if (interp) {
-            interp.current.lerp(interp.target, 0.2);
+interp.current.lerp(interp.target, 0.2);
             if (tagMeshes[id]) {
                 tagMeshes[id].position.copy(interp.current);
             }
@@ -360,7 +358,7 @@ function updateObjectMovement() {
             // Clamp position within room boundaries
             newX = Math.max(halfL, Math.min(newX, roomConfig.length - halfL));
             newZ = Math.max(halfW, Math.min(newZ, roomConfig.width - halfW));
-            newY = Math.max(halfH, Math.min(newY, roomConfig.height - halfH));
+newY = Math.max(halfH, Math.min(newY, roomConfig.height - halfH));
 
             // Apply the clamped position
             mesh.position.set(newX, newY, newZ);
@@ -438,7 +436,7 @@ function updateTable(tags) {
             <td><b>${id}</b></td>
             <td>${pos.x.toFixed(2)}</td>
             <td>${pos.y.toFixed(2)}</td>
-            <td>${pos.z.toFixed(2)}</td>
+<td>${pos.z.toFixed(2)}</td>
             <td style="color:${accuracyColor};font-weight:bold;">${pos.accuracy !== undefined ? '±' + pos.accuracy.toFixed(2) : 'N/A'}</td>
         </tr>`;
         tbody.innerHTML += row;
@@ -505,7 +503,7 @@ function renderObjectList() {
                     <label>Kích thước:</label>
                     <input type="number" class="obj-l" value="${obj.l}" data-index="${index}" placeholder="D">
                     <input type="number" class="obj-w" value="${obj.w}" data-index="${index}" placeholder="R">
-                    <input type="number" class="obj-h" value="${obj.h}" data-index="${index}" placeholder="C">
+<input type="number" class="obj-h" value="${obj.h}" data-index="${index}" placeholder="C">
                 </div>
                 <div class="prop-group">
                     <label>Vị trí:</label>
@@ -576,7 +574,7 @@ function updateRoom() {
     const w = parseFloat(document.getElementById('inpW').value) || 8;
     const h = parseFloat(document.getElementById('inpH').value) || 4;
     createRoom3D(l, w, h);
-    socket.emit('update_room_config', { length: l, width: w, height: h });
+socket.emit('update_room_config', { length: l, width: w, height: h });
 }
 
 // --- SOCKET LISTENERS ---
@@ -664,8 +662,8 @@ function loadMekongPreset() {
         const edges = new THREE.EdgesGeometry(geo);
         const lineMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
         mesh.add(new THREE.LineSegments(edges, lineMat));
-        mesh.position.set(x, sizeY / 2, z); 
-        presetGroup.add(mesh);
+        mesh.position.set(x, sizeY / 2, z);
+presetGroup.add(mesh);
     }
 
     function createDetailedRack(x, z, sizeX, bayLength, bays, sizeY, tiers = 3, hasBoxes = false) {
@@ -724,7 +722,7 @@ function loadMekongPreset() {
         
         const wireLen = startY - endY;
         const wireGeo = new THREE.CylinderGeometry(0.015, 0.015, wireLen);
-        const wireMat = new THREE.MeshBasicMaterial({ color: 0x333333 });
+const wireMat = new THREE.MeshBasicMaterial({ color: 0x333333 });
         const wire = new THREE.Mesh(wireGeo, wireMat);
         wire.position.set(0, endY + wireLen/2, 0); 
         lightGroup.add(wire);
@@ -783,7 +781,7 @@ function loadMekongPreset() {
     const wallHeight = 5.0;
     
     const leftWall = new THREE.Mesh(new THREE.BoxGeometry(wallThick, wallHeight, 30.0), shellMat);
-    leftWall.position.set(0, wallHeight/2, 15.0);
+leftWall.position.set(0, wallHeight/2, 15.0);
     presetGroup.add(leftWall);
 
     const rightWall = new THREE.Mesh(new THREE.BoxGeometry(wallThick, wallHeight, 30.0), shellMat);
@@ -859,8 +857,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 navLink.classList.add('active');
             }
         });
-
-        tabContents.forEach(tabContent => {
+tabContents.forEach(tabContent => {
             tabContent.classList.remove('active');
             if (tabContent.id === tabId) {
                 tabContent.classList.add('active');
@@ -956,7 +953,7 @@ btn2d.addEventListener('click', () => {
 // Collapsible sections
 const collapsibles = document.querySelectorAll('.collapsible');
 collapsibles.forEach(coll => {
-    coll.addEventListener('click', () => {
+coll.addEventListener('click', () => {
         coll.classList.toggle('active');
         const content = coll.nextElementSibling;
         if (content.style.maxHeight && content.style.maxHeight !== 'fit-content') {
@@ -966,3 +963,284 @@ collapsibles.forEach(coll => {
         }
     });
 });
+
+// ══════════════════════════════════════════════
+// MODAL & CRUD MANAGEMENT LOGIC
+// ══════════════════════════════════════════════
+
+// --- Dữ liệu lưu trong bộ nhớ ---
+const store = {
+    employees: [],
+    forklifts: [],
+    skus: [],
+    receipts: [],
+    deliveries: []
+};
+
+// --- Tiện ích tạo ID ---
+function genId(prefix) {
+    return prefix + '-' + Date.now().toString().slice(-5);
+}
+
+// --- Mở / đóng modal ---
+function openModal(id) {
+    document.getElementById(id).classList.add('open');
+}
+function closeModal(id) {
+    document.getElementById(id).classList.remove('open');
+}
+
+// Gán nút đóng cho tất cả modal
+document.querySelectorAll('.modal-close, .btn-secondary-outline[data-modal]').forEach(btn => {
+    btn.addEventListener('click', () => closeModal(btn.dataset.modal));
+});
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeModal(overlay.id);
+    });
+});
+
+// --- Set ngày mặc định cho các input date ---
+function setTodayDate(...ids) {
+    const today = new Date().toISOString().split('T')[0];
+    ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = today; });
+}
+
+// ══ NHÂN VIÊN ══
+document.getElementById('btn-add-employee').addEventListener('click', () => {
+    openModal('modal-employee');
+});
+
+document.getElementById('btn-save-employee').addEventListener('click', () => {
+    const name   = document.getElementById('emp-name').value.trim();
+    const role   = document.getElementById('emp-role').value.trim();
+    const status = document.getElementById('emp-status').value;
+    const tag    = document.getElementById('emp-tag').value.trim();
+
+    if (!name || !role) { alert('Vui lòng nhập Tên và Chức vụ!'); return; }
+
+    const emp = { id: genId('NV'), name, role, status, tag: tag || '—' };
+    store.employees.push(emp);
+    renderEmployees();
+    closeModal('modal-employee');
+
+    // Reset form
+    ['emp-name','emp-role','emp-tag'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('emp-status').value = 'active';
+});
+
+function renderEmployees() {
+    const tbody = document.getElementById('employee-tbody');
+    const search = (document.getElementById('employee-search').value || '').toLowerCase();
+    const rows = store.employees.filter(e =>
+        e.name.toLowerCase().includes(search) || e.id.toLowerCase().includes(search)
+    );
+    tbody.innerHTML = rows.map(e => `
+        <tr>
+            <td>${e.id}</td>
+            <td>${e.name}</td>
+<td>${e.role}</td>
+            <td><span class="status-badge ${e.status === 'active' ? 'status-active' : 'status-inactive'}">${e.status === 'active' ? 'Đang làm việc' : 'Nghỉ'}</span></td>
+            <td>${e.tag}</td>
+            <td>
+                <button class="btn-row-action btn-row-delete" onclick="deleteItem('employees','${e.id}', renderEmployees)">Xóa</button>
+            </td>
+        </tr>
+    `).join('') || '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:24px">Chưa có nhân viên nào</td></tr>';
+}
+
+document.getElementById('employee-search').addEventListener('input', renderEmployees);
+
+// ══ XE NÂNG ══
+document.getElementById('btn-add-forklift').addEventListener('click', () => {
+    openModal('modal-forklift');
+});
+
+document.getElementById('btn-save-forklift').addEventListener('click', () => {
+    const fid      = document.getElementById('fl-id').value.trim();
+    const type     = document.getElementById('fl-type').value;
+    const status   = document.getElementById('fl-status').value;
+    const tag      = document.getElementById('fl-tag').value.trim();
+    const location = document.getElementById('fl-location').value.trim();
+
+    if (!fid) { alert('Vui lòng nhập ID xe nâng!'); return; }
+
+    const fl = { id: fid, type, status, location: location || '—', tag: tag || '—' };
+    store.forklifts.push(fl);
+    renderForklifts();
+    closeModal('modal-forklift');
+
+    ['fl-id','fl-tag','fl-location'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('fl-status').value = 'active';
+});
+
+function renderForklifts() {
+    const tbody = document.getElementById('forklift-tbody');
+    const search = (document.getElementById('forklift-search').value || '').toLowerCase();
+    const rows = store.forklifts.filter(f =>
+        f.id.toLowerCase().includes(search)
+    );
+    tbody.innerHTML = rows.map(f => `
+        <tr>
+            <td>${f.id}</td>
+            <td>${f.type}</td>
+            <td><span class="status-badge ${f.status === 'active' ? 'status-active' : 'status-inactive'}">${f.status === 'active' ? 'Hoạt động' : 'Bảo trì'}</span></td>
+            <td>${f.location}</td>
+            <td>${f.tag}</td>
+            <td>
+                <button class="btn-row-action btn-row-delete" onclick="deleteItem('forklifts','${f.id}', renderForklifts)">Xóa</button>
+            </td>
+        </tr>
+    `).join('') || '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:24px">Chưa có xe nâng nào</td></tr>';
+}
+
+document.getElementById('forklift-search').addEventListener('input', renderForklifts);
+
+// ══ SKU ══
+document.getElementById('btn-add-sku').addEventListener('click', () => {
+    openModal('modal-sku');
+});
+
+document.getElementById('btn-save-sku').addEventListener('click', () => {
+    const code     = document.getElementById('sku-code').value.trim();
+    const name     = document.getElementById('sku-name').value.trim();
+const unit     = document.getElementById('sku-unit').value.trim();
+    const stock    = parseInt(document.getElementById('sku-stock').value) || 0;
+    const minStock = parseInt(document.getElementById('sku-min-stock').value) || 0;
+    const price    = parseInt(document.getElementById('sku-price').value) || 0;
+    const location = document.getElementById('sku-location').value.trim();
+
+    if (!code || !name) { alert('Vui lòng nhập Mã SKU và Tên hàng hóa!'); return; }
+
+    const sku = { code, name, unit: unit || '—', stock, minStock, price, location: location || '—' };
+    store.skus.push(sku);
+    renderSkus();
+    closeModal('modal-sku');
+
+    ['sku-code','sku-name','sku-unit','sku-stock','sku-min-stock','sku-price','sku-location']
+        .forEach(id => document.getElementById(id).value = '');
+});
+
+function renderSkus() {
+    const tbody  = document.getElementById('sku-tbody');
+    const search = (document.getElementById('sku-search').value || '').toLowerCase();
+    const filter = document.getElementById('sku-filter').value;
+    let rows = store.skus.filter(s =>
+        s.code.toLowerCase().includes(search) || s.name.toLowerCase().includes(search)
+    );
+    if (filter === 'low-stock') rows = rows.filter(s => s.stock > 0 && s.stock <= s.minStock);
+    if (filter === 'out-of-stock') rows = rows.filter(s => s.stock === 0);
+
+    const fmt = n => n.toLocaleString('vi-VN');
+    tbody.innerHTML = rows.map(s => `
+        <tr>
+            <td>${s.code}</td>
+            <td>${s.name}</td>
+            <td>${s.unit}</td>
+            <td>${fmt(s.stock)}</td>
+            <td>${fmt(s.minStock)}</td>
+            <td>${s.location}</td>
+            <td>${fmt(s.price)}</td>
+            <td>${fmt(s.stock * s.price)}</td>
+            <td>
+                <button class="btn-row-action btn-row-delete" onclick="deleteItem('skus','${s.code}', renderSkus, 'code')">Xóa</button>
+            </td>
+        </tr>
+    `).join('') || '<tr><td colspan="9" style="text-align:center;color:#aaa;padding:24px">Chưa có hàng hóa nào</td></tr>';
+}
+
+document.getElementById('sku-search').addEventListener('input', renderSkus);
+document.getElementById('sku-filter').addEventListener('change', renderSkus);
+
+// ══ PHIẾU NHẬP ══
+document.getElementById('btn-create-receipt').addEventListener('click', () => {
+    setTodayDate('rec-date');
+    document.getElementById('rec-code').value = 'PN-' + new Date().getFullYear() + '-' + String(store.receipts.length + 1).padStart(3,'0');
+    openModal('modal-receipt');
+});
+
+document.getElementById('btn-save-receipt').addEventListener('click', () => {
+    const code     = document.getElementById('rec-code').value.trim();
+    const date     = document.getElementById('rec-date').value;
+    const supplier = document.getElementById('rec-supplier').value.trim();
+    const status   = document.getElementById('rec-status').value;
+    const value    = parseInt(document.getElementById('rec-value').value) || 0;
+if (!code || !supplier) { alert('Vui lòng nhập Mã phiếu và Nhà cung cấp!'); return; }
+
+    store.receipts.push({ code, date, supplier, status, value });
+    renderReceipts();
+    closeModal('modal-receipt');
+
+    ['rec-code','rec-date','rec-supplier','rec-value'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('rec-status').value = 'pending';
+});
+
+function renderReceipts() {
+    const tbody = document.getElementById('receipt-tbody');
+    const fmt = n => n.toLocaleString('vi-VN');
+    tbody.innerHTML = store.receipts.map(r => `
+        <tr>
+            <td>${r.code}</td>
+            <td>${r.date}</td>
+            <td>${r.supplier}</td>
+            <td><span class="status-badge ${r.status === 'done' ? 'status-done' : 'status-pending'}">${r.status === 'done' ? 'Hoàn thành' : 'Chờ xử lý'}</span></td>
+            <td>${fmt(r.value)} ₫</td>
+            <td>
+                <button class="btn-row-action btn-row-delete" onclick="deleteItem('receipts','${r.code}', renderReceipts, 'code')">Xóa</button>
+            </td>
+        </tr>
+    `).join('') || '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:24px">Chưa có phiếu nhập nào</td></tr>';
+}
+
+// ══ PHIẾU XUẤT ══
+document.getElementById('btn-create-delivery').addEventListener('click', () => {
+    setTodayDate('del-date');
+    document.getElementById('del-code').value = 'PX-' + new Date().getFullYear() + '-' + String(store.deliveries.length + 1).padStart(3,'0');
+    openModal('modal-delivery');
+});
+
+document.getElementById('btn-save-delivery').addEventListener('click', () => {
+    const code     = document.getElementById('del-code').value.trim();
+    const date     = document.getElementById('del-date').value;
+    const customer = document.getElementById('del-customer').value.trim();
+    const status   = document.getElementById('del-status').value;
+
+    if (!code || !customer) { alert('Vui lòng nhập Mã phiếu và Khách hàng!'); return; }
+
+    store.deliveries.push({ code, date, customer, status });
+    renderDeliveries();
+    closeModal('modal-delivery');
+
+    ['del-code','del-date','del-customer'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('del-status').value = 'pending';
+});
+
+function renderDeliveries() {
+    const tbody = document.getElementById('delivery-tbody');
+    tbody.innerHTML = store.deliveries.map(d => `
+        <tr>
+            <td>${d.code}</td>
+            <td>${d.date}</td>
+            <td>${d.customer}</td>
+            <td><span class="status-badge ${d.status === 'done' ? 'status-done' : 'status-pending'}">${d.status === 'done' ? 'Hoàn thành' : 'Chờ xử lý'}</span></td>
+            <td>
+                <button class="btn-row-action btn-row-delete" onclick="deleteItem('deliveries','${d.code}', renderDeliveries, 'code')">Xóa</button>
+            </td>
+        </tr>
+`).join('') || '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:24px">Chưa có phiếu xuất nào</td></tr>';
+}
+
+// ══ XÓA ITEM ══
+window.deleteItem = function(storeKey, id, renderFn, idField = 'id') {
+    if (!confirm('Xác nhận xóa?')) return;
+    store[storeKey] = store[storeKey].filter(item => item[idField] !== id);
+    renderFn();
+};
+
+// Expose render functions to global scope for onclick handlers
+window.renderEmployees = renderEmployees;
+window.renderForklifts = renderForklifts;
+window.renderSkus = renderSkus;
+window.renderReceipts = renderReceipts;
+window.renderDeliveries = renderDeliveries;
+
