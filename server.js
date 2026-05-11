@@ -51,7 +51,7 @@ function loadDB() {
         console.error("⚠️ Lỗi đọc file DB, tạo DB mới:", err);
     }
     // Trả về cấu trúc mặc định nếu file chưa tồn tại
-    return { products: [], receipts: [], deliveries: [], auditLog: [] };
+   return { products: [], receipts: [], deliveries: [], auditLog: [], users: [] };
 }
 
 // Hàm ghi dữ liệu vào file
@@ -181,17 +181,68 @@ setInterval(() => {
     }
 }, UPDATE_INTERVAL);
 
+// --- API AUTH ---
+app.get('/', (req, res) => {
+    if (req.session && req.session.user) {
+        return res.redirect('/index.html');
+    }
+    res.redirect('/login.html');
+});
 
+app.post('/api/auth/register', async (req, res) => {
+    const { username, password, role } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Thiếu thông tin' });
+    if (!['admin', 'customer'].includes(role)) return res.status(400).json({ error: 'Role không hợp lệ' });
+    if (db.users.find(u => u.username === username)) return res.status(400).json({ error: 'Tên đăng nhập đã tồn tại' });
+
+    const hashed = await bcrypt.hash(password, 10);
+    const user = { id: 'U-' + Date.now(), username, password: hashed, role, createdAt: new Date().toISOString() };
+    db.users.push(user);
+    saveDB(db);
+    res.json({ success: true });
+});
+
+app.post('/api/auth/login', async (req, res) => {
+    const { username, password } = req.body;
+    const user = db.users.find(u => u.username === username);
+    if (!user) return res.status(401).json({ error: 'Sai tên đăng nhập hoặc mật khẩu' });
+
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) return res.status(401).json({ error: 'Sai tên đăng nhập hoặc mật khẩu' });
+
+    req.session.user = { id: user.id, username: user.username, role: user.role };
+    res.json({ success: true, role: user.role });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+    req.session.destroy();
+    res.json({ success: true });
+});
+
+app.get('/api/auth/me', (req, res) => {
+    if (req.session && req.session.user) return res.json(req.session.user);
+    res.status(401).json({ error: 'Chưa đăng nhập' });
+});
+
+// Tạo tài khoản admin mặc định nếu chưa có
+(async () => {
+    if (!db.users.find(u => u.role === 'admin')) {
+        const hashed = await bcrypt.hash('admin123', 10);
+        db.users.push({ id: 'U-default', username: 'admin', password: hashed, role: 'admin', createdAt: new Date().toISOString() });
+        saveDB(db);
+        console.log('✅ Tạo tài khoản admin mặc định: admin / admin123');
+    }
+})();
 // --- API QUẢN LÝ KHO HÀNG ---
 
-app.get('/api/stats', (req, res) => {
+app.get('/api/stats', requireLogin, (req, res) => {
     const totalProducts = db.products.length;
     const totalValue = db.products.reduce((sum, p) => sum + (p.price * p.quantity), 0);
     const lowStockCount = db.products.filter(p => p.minQuantity > 0 && p.quantity <= p.minQuantity).length;
     res.json({ totalProducts, totalValue, lowStockCount });
 });
 
-app.get('/api/products', (req, res) => res.json(db.products));
+app.get('/api/products', requireLogin, (req, res) => res.json(db.products));
 app.post('/api/products', (req, res) => {
     const product = { id: 'SKU-' + Date.now(), ...req.body };
     db.products.push(product);
@@ -201,7 +252,7 @@ app.post('/api/products', (req, res) => {
     res.json(product);
 });
 
-app.get('/api/receipts', (req, res) => res.json(db.receipts));
+app.get('/api/receipts', requireLogin,, (req, res) => res.json(db.receipts));
 app.post('/api/receipts', (req, res) => {
     const receipt = { id: 'PN-' + Date.now(), createdAt: new Date().toISOString(), ...req.body };
     let total = 0;
@@ -218,7 +269,7 @@ app.post('/api/receipts', (req, res) => {
     res.json(receipt);
 });
 
-app.get('/api/deliveries', (req, res) => res.json(db.deliveries));
+app.get('/api/deliveries', requireLogin, (req, res) => res.json(db.deliveries));
 app.post('/api/deliveries', (req, res) => {
     const delivery = { id: 'PX-' + Date.now(), createdAt: new Date().toISOString(), ...req.body };
     let total = 0;
@@ -235,7 +286,7 @@ app.post('/api/deliveries', (req, res) => {
     res.json(delivery);
 });
 
-app.get('/api/audit', (req, res) => res.json(db.auditLog));
+app.get('/api/audit', requireLogin, (req, res) => res.json(db.auditLog));
 
 
 // --- MATRIX & THUẬT TOÁN HELPER FUNCTIONS ---
