@@ -108,13 +108,16 @@ body {
 }
 
 .main-header {
+    position: relative;
+    z-index: 10;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
-    background-color: var(--bg-med);
-    padding: 15px;
-    border-radius: 8px;
+    justify-content: space-between;
+    padding: 10px 20px;
+    height: 60px;
+    background: #fff;
+    border-bottom: 1px solid #e5e7eb;
+    flex-shrink: 0;
 }
 
 .header-left h1 {
@@ -149,7 +152,9 @@ body {
 
 #scene-container-wrapper {
     position: relative;
-    height: calc(100vh - 150px);
+    width: 100%;
+    height: calc(100vh - 60px); /* 60px = chiều cao main-header */
+    overflow: hidden;
 }
 
 #floating-panel {
@@ -440,6 +445,10 @@ justify-content: center;
 #warehouse-splash {
     position: absolute;
     inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     display: flex;
     align-items: center;
     justify-content: center;
