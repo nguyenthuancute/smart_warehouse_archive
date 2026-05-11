@@ -2,34 +2,93 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Đăng ký</title>
+    <title>Đăng ký – Smart Warehouse</title>
     <link rel="stylesheet" href="auth.css">
+    <style>
+        .role-tabs { display: flex; margin-bottom: 20px; border-radius: 8px; overflow: hidden; border: 1px solid #dee2e6; }
+        .role-tab  { flex: 1; padding: 11px; text-align: center; cursor: pointer; font-weight: 600; font-size: .9em; background: #f8f9fa; color: #6c757d; transition: all .2s; border: none; }
+        .role-tab.active { background: #111827; color: #fff; }
+        .error-msg   { color: #dc2626; font-size: .85em; margin-top: 8px; display: none; }
+        .success-msg { color: #059669; font-size: .85em; margin-top: 8px; display: none; }
+        .auth-container { max-width: 400px; }
+    </style>
 </head>
 <body>
     <div class="auth-container">
-        <form action="/register" method="POST">
-            <h2>Đăng ký Tài khoản</h2>
-            <div class="input-group">
-                <label for="username">Tên đăng nhập</label>
-                <input type="text" id="username" name="username" required>
-            </div>
-            <div class="input-group">
-                <label for="password">Mật khẩu</label>
-                <input type="password" id="password" name="password" required>
-            </div>
-            <div class="input-group">
-                <label>Loại tài khoản:</label>
-                <div class="radio-group">
-                    <input type="radio" id="role_employee" name="role" value="employee" checked>
-                    <label for="role_employee">Nhân viên</label>
-                    <input type="radio" id="role_admin" name="role" value="admin">
-                    <label for="role_admin">Admin</label>
-                </div>
-            </div>
-            <button type="submit">Đăng ký</button>
-            <p>Đã có tài khoản? <a href="/login">Đăng nhập</a></p>
-        </form>
+        <div style="text-align:center; margin-bottom:20px;">
+            <div style="font-size:2em;">🏭</div>
+            <h2 style="margin:4px 0 2px; font-size:1.3em;">Tạo tài khoản</h2>
+            <p style="color:#6c757d; font-size:.85em; margin:0;">Smart Warehouse</p>
+        </div>
+
+        <p style="font-size:.85em; color:#374151; margin-bottom:10px; font-weight:600;">Loại tài khoản:</p>
+        <div class="role-tabs">
+            <button class="role-tab active" data-role="admin" onclick="selectRole('admin')">
+                🔧 Quản lý kho
+            </button>
+            <button class="role-tab" data-role="customer" onclick="selectRole('customer')">
+                👤 Khách hàng
+            </button>
+        </div>
+
+        <div class="input-group">
+            <label>Tên đăng nhập</label>
+            <input type="text" id="reg-username" placeholder="Tối thiểu 4 ký tự">
+        </div>
+        <div class="input-group">
+            <label>Mật khẩu</label>
+            <input type="password" id="reg-password" placeholder="Tối thiểu 6 ký tự">
+        </div>
+        <div class="input-group">
+            <label>Xác nhận mật khẩu</label>
+            <input type="password" id="reg-confirm" placeholder="Nhập lại mật khẩu">
+        </div>
+
+        <p class="error-msg"   id="reg-error"></p>
+        <p class="success-msg" id="reg-success">✅ Đăng ký thành công! Đang chuyển hướng...</p>
+
+        <button onclick="doRegister()" style="width:100%; margin-top:8px; padding:12px; background:#111827; color:#fff; border:none; border-radius:8px; font-size:1em; font-weight:600; cursor:pointer;">
+            Đăng ký
+        </button>
+
+        <p style="font-size:.85em; text-align:center; margin-top:14px; color:#6c757d;">
+            Đã có tài khoản? <a href="/login.html" style="color:#111827; font-weight:600;">Đăng nhập</a>
+        </p>
     </div>
+
+    <script>
+        let selectedRole = 'admin';
+        function selectRole(role) {
+            selectedRole = role;
+            document.querySelectorAll('.role-tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`[data-role="${role}"]`).classList.add('active');
+        }
+
+        async function doRegister() {
+            const username = document.getElementById('reg-username').value.trim();
+            const password = document.getElementById('reg-password').value;
+            const confirm  = document.getElementById('reg-confirm').value;
+            const errEl    = document.getElementById('reg-error');
+            const sucEl    = document.getElementById('reg-success');
+            errEl.style.display = 'none';
+            sucEl.style.display = 'none';
+
+            if (username.length < 4) { errEl.textContent = 'Tên đăng nhập tối thiểu 4 ký tự!'; errEl.style.display = 'block'; return; }
+            if (password.length < 6) { errEl.textContent = 'Mật khẩu tối thiểu 6 ký tự!'; errEl.style.display = 'block'; return; }
+            if (password !== confirm) { errEl.textContent = 'Mật khẩu xác nhận không khớp!'; errEl.style.display = 'block'; return; }
+
+            const res = await fetch('/api/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password, role: selectedRole })
+            });
+            const data = await res.json();
+
+            if (!res.ok) { errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+
+            sucEl.style.display = 'block';
+            setTimeout(() => window.location.href = '/login.html', 1500);
+        }
+    </script>
 </body>
 </html>
