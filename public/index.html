@@ -70,12 +70,29 @@
                     </div>
                 </div>
 
-                <div id="scene-container-wrapper">
-                    <div id="scene-container"></div>
-                    <div id="map-2d-container">
-                        <canvas id="main-2d-canvas"></canvas>
-                    </div>
-                    <div id="axis-container"></div>
+               <div id="scene-container-wrapper">
+    <!-- Màn hình chào chờ load -->
+    <div id="warehouse-splash">
+        <div class="splash-inner">
+            <div class="splash-icon">🏭</div>
+            <h2>Mô phỏng kho hàng 3D</h2>
+            <p>Chọn chế độ hiển thị để bắt đầu</p>
+            <div class="splash-btns">
+                <button id="splash-btn-3d" class="splash-btn">
+                    <span>🧊</span> Xem kho 3D
+                </button>
+                <button id="splash-btn-2d" class="splash-btn">
+                    <span>🗺️</span> Xem bản đồ 2D
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="scene-container" style="display:none;"></div>
+    <div id="map-2d-container" style="display:none;">
+        <canvas id="main-2d-canvas"></canvas>
+    </div>
+    <div id="axis-container"></div>
 
                     <!-- Floating Settings Panel -->
                     <div id="floating-panel" style="display: none;">
