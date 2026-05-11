@@ -1,6 +1,44 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script>
+    // Kiểm tra đăng nhập, nếu chưa đăng nhập → về login
+    fetch('/api/auth/me').then(r => {
+        if (!r.ok) window.location.href = '/login.html';
+        return r.json();
+    }).then(user => {
+        // Hiển thị tên user và nút logout
+        document.addEventListener('DOMContentLoaded', () => {
+            const sidebar = document.getElementById('sidebar');
+            const userBar = document.createElement('div');
+            userBar.style.cssText = 'margin-top:auto; padding:12px; border-top:1px solid #374151; font-size:.82em;';
+            userBar.innerHTML = `
+                <div style="color:#9ca3af; margin-bottom:6px;">Xin chào,</div>
+                <div style="font-weight:700; margin-bottom:10px;">${user.username} 
+                    <span style="background:#374151;color:#9ca3af;padding:2px 7px;border-radius:10px;font-size:.78em;font-weight:400;">
+                        ${user.role === 'admin' ? 'Quản lý' : 'Khách hàng'}
+                    </span>
+                </div>
+                <button onclick="doLogout()" style="width:100%;padding:7px;background:#374151;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.85em;">
+                    Đăng xuất
+                </button>`;
+            sidebar.appendChild(userBar);
+
+            // Ẩn menu quản lý nếu là khách hàng
+            if (user.role === 'customer') {
+                ['tab-employee','tab-forklift','tab-receipt','tab-delivery','tab-log'].forEach(tabId => {
+                    const link = document.querySelector(`[data-tab="${tabId}"]`);
+                    if (link) link.parentElement.style.display = 'none';
+                });
+            }
+        });
+    }).catch(() => window.location.href = '/login.html');
+
+    async function doLogout() {
+        await fetch('/api/auth/logout', { method: 'POST' });
+        window.location.href = '/login.html';
+    }
+</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart Warehouse</title>
