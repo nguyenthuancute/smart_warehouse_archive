@@ -12,9 +12,30 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+const session = require('express-session');
+const bcrypt = require('bcryptjs');
+
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public'))); 
+
+app.use(session({
+    secret: 'smart_warehouse_secret_2026',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 } // 7 ngày
+}));
+
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Middleware kiểm tra đăng nhập
+function requireLogin(req, res, next) {
+    if (req.session && req.session.user) return next();
+    res.redirect('/login.html');
+}
+function requireAdmin(req, res, next) {
+    if (req.session && req.session.user && req.session.user.role === 'admin') return next();
+    res.status(403).json({ error: 'Không có quyền truy cập' });
+}
 
 // --- DATABASE KHO (TÍCH HỢP TRỰC TIẾP) ---
 const dbFile = path.join(__dirname, 'db.json');
