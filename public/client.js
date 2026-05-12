@@ -63,6 +63,51 @@ let tagMeshes = {};
 let tagDataStore = {};
 let tagInterpolation = {};
 let roomConfig = { length: 10, width: 8, height: 4 };
+
+// --- BOX DATA (thùng hàng có mã SKU) ---
+let boxesData = {}; // { boxId: { name, sku, quantity, weight, note, location } }
+let boxMeshMap = []; // [{ mesh, boxId }]
+let currentUserRole = 'customer';
+
+// Lấy thông tin user hiện tại
+fetch('/api/auth/me').then(r => r.json()).then(u => { currentUserRole = u.role; }).catch(() => {});
+
+// Lấy danh sách boxes từ server
+async function loadBoxesData() {
+    try {
+        const res = await fetch('/api/boxes');
+        const boxes = await res.json();
+        boxesData = {};
+        boxes.forEach(b => { boxesData[b.boxId] = b; });
+    } catch(e) { console.warn('Không thể tải dữ liệu boxes'); }
+}
+loadBoxesData();
+
+// Tạo texture label SKU cho thùng hàng
+function makeBoxLabelTexture(boxId, sku) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256; canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#d2a679';
+    ctx.fillRect(0, 0, 256, 128);
+    ctx.strokeStyle = '#8b5e3c';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(3, 3, 250, 122);
+    ctx.fillStyle = '#fff8f0';
+    ctx.fillRect(10, 10, 236, 108);
+    ctx.fillStyle = '#1e3a5f';
+    ctx.font = 'bold 22px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(boxId, 128, 45);
+    ctx.fillStyle = '#374151';
+    ctx.font = '18px sans-serif';
+    ctx.fillText(sku ? 'SKU: ' + sku : 'Chưa gắn SKU', 128, 80);
+    ctx.fillStyle = '#6b7280';
+    ctx.font = '13px sans-serif';
+    ctx.fillText('Click để xem chi tiết', 128, 108);
+    const tex = new THREE.CanvasTexture(canvas);
+    return tex;
+}
  
 // --- OBJECT SELECTION & MANIPULATION ---
 let selectedObjects = [];
@@ -102,15 +147,28 @@ if(obj) obj.material.color.set(0xaaaaaa)
  
 // --- Event Listeners for Controls and Selection ---
  
-// Left-click to select
+// Left-click to select hoặc xem thông tin thùng hàng
 container.addEventListener('click', (event) => {
     const rect = renderer.domElement.getBoundingClientRect();
     mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
- 
+
     raycaster.setFromCamera(mouse, camera);
+
+    // Kiểm tra click vào thùng hàng preset (có boxId)
+    const presetGroup = scene.getObjectByName('presetGroup');
+    if (presetGroup) {
+        const allMeshes = [];
+        presetGroup.traverse(obj => { if (obj.isMesh && obj.userData.isBox) allMeshes.push(obj); });
+        const boxHits = raycaster.intersectObjects(allMeshes, false);
+        if (boxHits.length > 0) {
+            const hit = boxHits[0].object;
+            openBoxPopup(hit.userData.boxId, event.clientX, event.clientY);
+            return;
+        }
+    }
+
     const intersects = raycaster.intersectObjects(objectGroup.children);
- 
     if (intersects.length > 0) {
         const firstIntersected = intersects[0].object;
         const isAdditive = event.shiftKey;
@@ -672,7 +730,7 @@ function loadMekongPreset() {
 presetGroup.add(mesh);
     }
  
-    function createDetailedRack(x, z, sizeX, bayLength, bays, sizeY, tiers = 3, hasBoxes = false) {
+    function createDetailedRack(x, z, sizeX, bayLength, bays, sizeY, tiers = 3, hasBoxes = false, rackId = 'R') {
         const rackGroup = new THREE.Group();
         const frameMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.6 }); 
         const shelfMat = new THREE.MeshStandardMaterial({ color: 0xff6600, roughness: 0.5 }); 
@@ -712,10 +770,25 @@ presetGroup.add(mesh);
                 shelf.position.set(0, tierY, shelfZ);
                 rackGroup.add(shelf);
                 if (hasBoxes) {
-                    const boxMesh = new THREE.Mesh(boxGeo, boxMat);
+                    const boxId = `${rackId}-B${j+1}T${i+1}`;
+                    const boxInfo = boxesData[boxId] || {};
+                    const labelTex = makeBoxLabelTexture(boxId, boxInfo.sku || '');
+                    const labelMat = new THREE.MeshBasicMaterial({ map: labelTex });
+                    const mats = [
+                        new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }),
+                        new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }),
+                        new THREE.MeshStandardMaterial({ color: 0xc49a6c, roughness: 0.9 }),
+                        new THREE.MeshStandardMaterial({ color: 0xc49a6c, roughness: 0.9 }),
+                        labelMat, // mặt trước
+                        new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }),
+                    ];
+                    const boxMesh = new THREE.Mesh(boxGeo, mats);
                     boxMesh.add(new THREE.LineSegments(boxEdges, boxLineMat));
                     boxMesh.position.set(0, tierY + (shelfThick / 2) + (boxHeight / 2), shelfZ);
+                    boxMesh.userData.boxId = boxId;
+                    boxMesh.userData.isBox = true;
                     rackGroup.add(boxMesh);
+                    boxMeshMap.push({ mesh: boxMesh, boxId });
                 }
             }
         }
@@ -759,8 +832,8 @@ const wireMat = new THREE.MeshBasicMaterial({ color: 0x333333 });
         createDetailedRack(6.4, currentZ, rackWidth, 1.0, 4, lowHeight, 3, false); 
     }
     createSolidBox(0x9ca3af, 4.4, 7.7, 0.8, 12.6, 0.5);
-    createDetailedRack(7.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true);
-    createDetailedRack(14.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true);
+    createDetailedRack(7.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true, 'RA');
+    createDetailedRack(14.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true, 'RB');
  
     const lineMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
     const wingGeo = new THREE.BoxGeometry(1.0, 2.5, 0.1);
@@ -1273,3 +1346,165 @@ window.renderForklifts = renderForklifts;
 window.renderSkus = renderSkus;
 window.renderReceipts = renderReceipts;
 window.renderDeliveries = renderDeliveries;
+
+// ══════════════════════════════════════════════
+// THÙNG HÀNG - POPUP & CRUD
+// ══════════════════════════════════════════════
+
+function openBoxPopup(boxId, clientX, clientY) {
+    const box = boxesData[boxId] || {};
+    const isAdmin = currentUserRole === 'admin';
+
+    // Xóa popup cũ nếu có
+    let old = document.getElementById('box-popup');
+    if (old) old.remove();
+
+    const popup = document.createElement('div');
+    popup.id = 'box-popup';
+    popup.style.cssText = `
+        position: fixed; z-index: 9999;
+        left: ${Math.min(clientX + 10, window.innerWidth - 340)}px;
+        top: ${Math.min(clientY + 10, window.innerHeight - 420)}px;
+        width: 320px; background: #fff;
+        border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.22);
+        padding: 20px 22px 16px; font-family: 'Segoe UI', sans-serif;
+        animation: popupIn .15s ease;
+    `;
+
+    const fmt = v => v || '<span style="color:#aaa">Chưa có</span>';
+
+    popup.innerHTML = `
+        <style>
+            @keyframes popupIn { from { transform: scale(.92); opacity:0; } to { transform: scale(1); opacity:1; } }
+            #box-popup input, #box-popup textarea { width:100%; box-sizing:border-box; padding:6px 9px; border:1px solid #dee2e6; border-radius:5px; font-size:.85em; margin-top:3px; }
+            #box-popup label { font-size:.78em; font-weight:600; color:#374151; display:block; margin-top:10px; }
+            .box-badge { display:inline-block; background:#1e3a5f; color:#fff; padding:3px 10px; border-radius:20px; font-size:.75em; font-weight:700; margin-bottom:10px; }
+            .popup-actions { display:flex; gap:8px; margin-top:14px; justify-content:flex-end; }
+            .btn-popup { padding:7px 16px; border-radius:6px; border:none; cursor:pointer; font-size:.82em; font-weight:600; }
+            .btn-popup-save { background:#111827; color:#fff; }
+            .btn-popup-delete { background:#fee2e2; color:#dc2626; }
+            .btn-popup-close { background:#f3f4f6; color:#374151; }
+        </style>
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px;">
+            <div>
+                <div class="box-badge">📦 ${boxId}</div>
+                <div style="font-size:.8em; color:#6b7280;">Thùng hàng trong kho</div>
+            </div>
+            <button class="btn-popup btn-popup-close" onclick="document.getElementById('box-popup').remove()" style="padding:4px 10px;">✕</button>
+        </div>
+        <hr style="border:none; border-top:1px solid #f0f0f0; margin:10px 0;">
+        ${isAdmin ? `
+            <label>Tên hàng hóa</label>
+            <input id="bp-name" value="${box.name || ''}" placeholder="Tên hàng hóa">
+            <label>Mã SKU</label>
+            <input id="bp-sku" value="${box.sku || ''}" placeholder="SKU-00001">
+            <label>Số lượng</label>
+            <input id="bp-qty" type="number" value="${box.quantity || 0}" min="0">
+            <label>Trọng lượng (kg)</label>
+            <input id="bp-weight" type="number" value="${box.weight || 0}" min="0" step="0.1">
+            <label>Vị trí trong kho</label>
+            <input id="bp-loc" value="${box.location || ''}" placeholder="Kệ A1, Tầng 2...">
+            <label>Ghi chú</label>
+            <textarea id="bp-note" rows="2" placeholder="Ghi chú...">${box.note || ''}</textarea>
+            <div class="popup-actions">
+                <button class="btn-popup btn-popup-delete" onclick="deleteBox('${boxId}')">Xóa</button>
+                <button class="btn-popup btn-popup-save" onclick="saveBox('${boxId}')">💾 Lưu</button>
+            </div>
+        ` : `
+            <table style="width:100%; font-size:.85em; border-collapse:collapse;">
+                <tr><td style="color:#6b7280; padding:4px 0; width:100px;">Tên hàng:</td><td>${fmt(box.name)}</td></tr>
+                <tr><td style="color:#6b7280; padding:4px 0;">Mã SKU:</td><td>${fmt(box.sku)}</td></tr>
+                <tr><td style="color:#6b7280; padding:4px 0;">Số lượng:</td><td>${box.quantity || 0}</td></tr>
+                <tr><td style="color:#6b7280; padding:4px 0;">Trọng lượng:</td><td>${box.weight ? box.weight + ' kg' : '<span style="color:#aaa">Chưa có</span>'}</td></tr>
+                <tr><td style="color:#6b7280; padding:4px 0;">Vị trí:</td><td>${fmt(box.location)}</td></tr>
+                <tr><td style="color:#6b7280; padding:4px 0;">Ghi chú:</td><td>${fmt(box.note)}</td></tr>
+            </table>
+            <div class="popup-actions">
+                <button class="btn-popup btn-popup-close" onclick="document.getElementById('box-popup').remove()">Đóng</button>
+            </div>
+        `}
+    `;
+
+    document.body.appendChild(popup);
+
+    // Click ngoài để đóng
+    setTimeout(() => {
+        document.addEventListener('click', function closePopup(e) {
+            if (!document.getElementById('box-popup')?.contains(e.target)) {
+                document.getElementById('box-popup')?.remove();
+                document.removeEventListener('click', closePopup);
+            }
+        });
+    }, 100);
+}
+
+window.saveBox = async function(boxId) {
+    const body = {
+        boxId,
+        name: document.getElementById('bp-name').value.trim(),
+        sku: document.getElementById('bp-sku').value.trim(),
+        quantity: parseFloat(document.getElementById('bp-qty').value) || 0,
+        weight: parseFloat(document.getElementById('bp-weight').value) || 0,
+        location: document.getElementById('bp-loc').value.trim(),
+        note: document.getElementById('bp-note').value.trim(),
+    };
+
+    const existing = boxesData[boxId];
+    const method = existing ? 'PUT' : 'POST';
+    const url = existing ? `/api/boxes/${boxId}` : '/api/boxes';
+
+    const res = await fetch(url, {
+        method, headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+
+    if (res.ok) {
+        const updated = await res.json();
+        boxesData[boxId] = updated;
+        document.getElementById('box-popup')?.remove();
+        // Reload preset để cập nhật label
+        const pg = scene.getObjectByName('presetGroup');
+        if (pg) { scene.remove(pg); }
+        boxMeshMap = [];
+        loadMekongPreset();
+        showToast(`✅ Đã lưu thông tin ${boxId}`);
+    } else {
+        const err = await res.json();
+        alert('Lỗi: ' + err.error);
+    }
+};
+
+window.deleteBox = async function(boxId) {
+    if (!confirm(`Xóa thông tin thùng hàng ${boxId}?`)) return;
+    await fetch(`/api/boxes/${boxId}`, { method: 'DELETE' });
+    delete boxesData[boxId];
+    document.getElementById('box-popup')?.remove();
+    const pg = scene.getObjectByName('presetGroup');
+    if (pg) { scene.remove(pg); }
+    boxMeshMap = [];
+    loadMekongPreset();
+    showToast(`🗑️ Đã xóa thông tin ${boxId}`);
+};
+
+function showToast(msg) {
+    let toast = document.getElementById('box-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'box-toast';
+        toast.style.cssText = 'position:fixed; bottom:24px; right:24px; background:#111827; color:#fff; padding:10px 20px; border-radius:8px; font-size:.85em; z-index:99999; transition:opacity .3s;';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.style.opacity = '1';
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => { toast.style.opacity = '0'; }, 2500);
+}
+
+// Lắng nghe cập nhật realtime từ server
+if (typeof io !== 'undefined') {
+    const sock = io();
+    sock.on('boxes_updated', (boxes) => {
+        boxesData = {};
+        boxes.forEach(b => { boxesData[b.boxId] = b; });
+    });
+}
