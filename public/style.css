@@ -172,9 +172,12 @@ body {
  
 #scene-container-wrapper {
     position: relative;
-    flex: 1;
-    height: calc(100vh - 56px);
+    width: calc(100% - 40px);
+    height: calc(100vh - 116px);
+    margin: 20px;
     overflow: hidden;
+    border-radius: 8px;
+    background-color: #0d1117;
 }
  
 #floating-panel {
