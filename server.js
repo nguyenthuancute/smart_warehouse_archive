@@ -175,23 +175,30 @@ io.on('connection', (socket) => {
 });
 
 // --- MQTT ---
-const MQTT_HOST = '127.0.0.1';
-const MQTT_PORT = 1883;
+const MQTT_HOST = process.env.MQTT_HOST || null;
+const MQTT_PORT = process.env.MQTT_PORT || 1883;
 
-// Lưu ý: Trên Render sẽ không có sẵn MQTT broker ở localhost (127.0.0.1)
-// Nếu bạn dùng broker bên ngoài (như HiveMQ, EMQX), hãy thay đổi IP/Host ở trên.
-const client = mqtt.connect(`mqtt://${MQTT_HOST}`, {
-    port: MQTT_PORT
-});
+let mqttClient = null;
 
-client.on('connect', () => {
-    console.log('✅ MQTT Connected');
-    client.subscribe('kho_thong_minh/tags/+');
-});
+if (MQTT_HOST) {
+    mqttClient = mqtt.connect(`mqtt://${MQTT_HOST}`, { port: MQTT_PORT });
 
-client.on('error', (err) => {
-    console.log('⚠️ MQTT Connection Error (Bỏ qua nếu bạn không chạy Broker trên Render):', err.message);
-});
+    mqttClient.on('connect', () => {
+        console.log('✅ MQTT Connected to', MQTT_HOST);
+        mqttClient.subscribe('kho_thong_minh/tags/+');
+    });
+
+    mqttClient.on('error', (err) => {
+        console.warn('⚠️ MQTT Error:', err.message);
+        mqttClient.end();
+    });
+
+    mqttClient.on('message', async (topic, message) => {
+        // ... giữ nguyên code xử lý message của bạn
+    });
+} else {
+    console.log('ℹ️ Không có MQTT_HOST → Bỏ qua kết nối MQTT (chế độ demo)');
+}
 
 client.on('message', async (topic, message) => {
     try {
