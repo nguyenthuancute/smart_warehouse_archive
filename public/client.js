@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-
+ 
 const socket = io();
-
+ 
 // --- SETUP THREE.JS (3D) ---
 const container = document.getElementById('scene-container');
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1a1a2e);
  
+// Dùng kích thước fallback nếu container đang ẩn
 const initW = container.clientWidth || window.innerWidth - 260;
 const initH = container.clientHeight || window.innerHeight - 56;
  
@@ -18,41 +19,43 @@ camera.lookAt(0, 0, 0);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(initW, initH);
 container.appendChild(renderer.domElement);
-
+ 
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
 scene.add(ambientLight);
 const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
 dirLight.position.set(10, 20, 10);
 scene.add(dirLight);
-
+ 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-
+ 
 const gridHelper = new THREE.GridHelper(1000, 100, 0x535353, 0x3a3a3a);
 scene.add(gridHelper);
-
+ 
 const anchorGroup = new THREE.Group();
 scene.add(anchorGroup);
 const tagGroup = new THREE.Group();
 scene.add(tagGroup);
 const objectGroup = new THREE.Group();
 scene.add(objectGroup);
-
+ 
 // --- AXIS GIZMO ---
 const axisContainer = document.getElementById('axis-container');
 const axisScene = new THREE.Scene();
-const axisCamera = new THREE.PerspectiveCamera(50, axisContainer.clientWidth / axisContainer.clientHeight, 0.1, 10);
+const axisW = axisContainer.clientWidth || 80;
+const axisH = axisContainer.clientHeight || 80;
+const axisCamera = new THREE.PerspectiveCamera(50, axisW / axisH, 0.1, 10);
 axisCamera.position.z = 2;
 const axisRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-axisRenderer.setSize(axisContainer.clientWidth, axisContainer.clientHeight);
+axisRenderer.setSize(axisW, axisH);
 axisContainer.appendChild(axisRenderer.domElement);
-
+ 
 const axisHelper = new THREE.AxesHelper(1);
 axisScene.add(axisHelper);
-
+ 
 const canvas2d = document.getElementById('main-2d-canvas');
 const ctx2d = canvas2d.getContext('2d');
-
+ 
 let roomMesh = null;
 let anchorsData = [];
 let objectsData = [];
@@ -60,12 +63,12 @@ let tagMeshes = {};
 let tagDataStore = {};
 let tagInterpolation = {};
 let roomConfig = { length: 10, width: 8, height: 4 };
-
+ 
 // --- OBJECT SELECTION & MANIPULATION ---
 let selectedObjects = [];
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
-
+ 
 function getObjectByMesh(mesh) {
     const index = objectGroup.children.indexOf(mesh);
     if (index !== -1) {
@@ -73,12 +76,12 @@ function getObjectByMesh(mesh) {
     }
     return null;
 }
-
+ 
 function selectObject(mesh, additive = false) {
     if (!additive) {
         deselectAllObjects();
     }
-
+ 
     const index = selectedObjects.findIndex(obj => obj.uuid === mesh.uuid);
     if (index === -1) {
         selectedObjects.push(mesh);
@@ -89,25 +92,25 @@ function selectObject(mesh, additive = false) {
         selectedObjects.splice(index, 1);
     }
 }
-
+ 
 function deselectAllObjects() {
     selectedObjects.forEach(obj => {
 if(obj) obj.material.color.set(0xaaaaaa)
     });
     selectedObjects = [];
 }
-
+ 
 // --- Event Listeners for Controls and Selection ---
-
+ 
 // Left-click to select
 container.addEventListener('click', (event) => {
     const rect = renderer.domElement.getBoundingClientRect();
     mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
+ 
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObjects(objectGroup.children);
-
+ 
     if (intersects.length > 0) {
         const firstIntersected = intersects[0].object;
         const isAdditive = event.shiftKey;
@@ -116,40 +119,40 @@ container.addEventListener('click', (event) => {
         deselectAllObjects();
     }
 });
-
+ 
 // --- Context Menu Logic ---
 const contextMenu = document.getElementById('context-menu');
-
+ 
 container.addEventListener('contextmenu', (event) => {
     event.preventDefault();
-
+ 
     // Raycast to see if we're clicking on an object
     const rect = renderer.domElement.getBoundingClientRect();
     mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObjects(objectGroup.children);
-
+ 
     if (intersects.length > 0) {
         const clickedMesh = intersects[0].object;
         if (!selectedObjects.includes(clickedMesh)) {
             selectObject(clickedMesh, false);
         }
     }
-
+ 
     // Show context menu
     contextMenu.style.display = 'block';
     contextMenu.style.left = `${event.clientX}px`;
     contextMenu.style.top = `${event.clientY}px`;
 });
-
+ 
 // Hide context menu on left-click
 window.addEventListener('click', (e) => {
     if (!contextMenu.contains(e.target)) {
         contextMenu.style.display = 'none';
     }
 });
-
+ 
 document.getElementById('ctx-duplicate').addEventListener('click', () => {
     if (selectedObjects.length > 0) {
         selectedObjects.forEach(mesh => {
@@ -166,17 +169,17 @@ document.getElementById('ctx-duplicate').addEventListener('click', () => {
     }
     contextMenu.style.display = 'none';
 });
-
+ 
 document.getElementById('ctx-delete').addEventListener('click', () => {
     if (selectedObjects.length > 0) {
         const idsToDelete = selectedObjects.map(mesh => {
             const objInfo = getObjectByMesh(mesh);
             return objInfo ? objInfo.index : -1;
         }).filter(index => index !== -1);
-
+ 
         // Sort indices in descending order to avoid messing up subsequent indices when splicing
         idsToDelete.sort((a, b) => b - a);
-
+ 
         idsToDelete.forEach(index => {
             objectsData.splice(index, 1);
         });
@@ -186,8 +189,8 @@ deselectAllObjects();
     }
     contextMenu.style.display = 'none';
 });
-
-
+ 
+ 
 // --- 3D LOGIC ---
 function createRoom3D(length, width, height) {
     if (roomMesh) scene.remove(roomMesh);
@@ -199,17 +202,17 @@ function createRoom3D(length, width, height) {
         side: THREE.DoubleSide
     });
     roomMesh = new THREE.Mesh(geometry, material);
-
+ 
     const edges = new THREE.EdgesGeometry(geometry);
     const lineMaterial = new THREE.LineBasicMaterial({ color: 0xe94560 });
     const wireframe = new THREE.LineSegments(edges, lineMaterial);
     roomMesh.add(wireframe);
-
+ 
     roomMesh.position.set(length / 2, height / 2, width / 2);
     scene.add(roomMesh);
     roomConfig = { length, width, height };
 }
-
+ 
 function updateAnchors3D(anchors) {
     while (anchorGroup.children.length > 0) anchorGroup.remove(anchorGroup.children[0]);
     anchors.forEach(anc => {
@@ -220,14 +223,14 @@ function updateAnchors3D(anchors) {
         anchorGroup.add(mesh);
     });
 }
-
+ 
 function updateObjects3D() {
     // Preserve selection
     const previouslySelectedUUIDs = selectedObjects.map(m => m.uuid);
     deselectAllObjects();
-
+ 
     while (objectGroup.children.length > 0) objectGroup.remove(objectGroup.children[0]);
-
+ 
     objectsData.forEach(obj => {
         const geometry = new THREE.BoxGeometry(obj.l, obj.h, obj.w);
         const material = new THREE.MeshStandardMaterial({ color: 0xaaaaaa });
@@ -235,7 +238,7 @@ function updateObjects3D() {
         mesh.position.set(obj.x, obj.z, obj.y);
         objectGroup.add(mesh);
     });
-
+ 
     // Re-select objects
     objectGroup.children.forEach(mesh => {
         if (previouslySelectedUUIDs.includes(mesh.uuid)) {
@@ -243,7 +246,7 @@ function updateObjects3D() {
         }
     });
 }
-
+ 
 function updateTags3D(tags) {
     Object.keys(tags).forEach(id => {
         const targetPos = tags[id];
@@ -261,7 +264,7 @@ function updateTags3D(tags) {
         tagInterpolation[id].target.set(targetPos.x, targetPos.z, targetPos.y);
     });
 }
-
+ 
 function interpolateTagPositions() {
     Object.keys(tagInterpolation).forEach(id => {
         const interp = tagInterpolation[id];
@@ -273,7 +276,7 @@ interp.current.lerp(interp.target, 0.2);
         }
     });
 }
-
+ 
 // --- KEYBOARD CONTROLS ---
 const keyStates = {};
 window.addEventListener('keydown', (event) => {
@@ -282,14 +285,14 @@ window.addEventListener('keydown', (event) => {
 window.addEventListener('keyup', (event) => {
     keyStates[event.key.toLowerCase()] = false;
 });
-
+ 
 function updateCameraMovement() {
     const moveSpeed = 5.0;
     const forward = new THREE.Vector3();
     camera.getWorldDirection(forward);
     const forwardOnPlane = new THREE.Vector3(forward.x, 0, forward.z).normalize();
     const right = new THREE.Vector3().crossVectors(camera.up, forward).normalize();
-
+ 
     if (keyStates['w']) {
         const moveVector = forwardOnPlane.clone().multiplyScalar(moveSpeed * 0.1);
         camera.position.add(moveVector);
@@ -311,19 +314,19 @@ function updateCameraMovement() {
         controls.target.add(moveVector);
     }
 }
-
+ 
 function updateObjectMovement() {
     if (selectedObjects.length === 0) return;
-
+ 
     const moveSpeed = 2.0; // Units per second
     const delta = 0.016; // assume 60fps for now
-
+ 
     const moveDistance = moveSpeed * delta;
-
+ 
     let moveX = 0;
     let moveY = 0;
     let moveZ = 0;
-
+ 
     if (keyStates['arrowup']) {
         moveZ = -moveDistance;
     }
@@ -342,31 +345,31 @@ function updateObjectMovement() {
     if (keyStates['pagedown']) {
         moveY = -moveDistance;
     }
-
+ 
     if (moveX !== 0 || moveY !== 0 || moveZ !== 0) {
         selectedObjects.forEach(mesh => {
             const objInfo = getObjectByMesh(mesh);
             if (!objInfo) return;
-
+ 
             const { data } = objInfo;
             const halfL = data.l / 2;
             const halfW = data.w / 2;
             const halfH = data.h / 2;
-
+ 
             // Calculate new position
             let newX = mesh.position.x + moveX;
             let newY = mesh.position.y + moveY;
             let newZ = mesh.position.z + moveZ;
-
+ 
             // Clamp position within room boundaries
             newX = Math.max(halfL, Math.min(newX, roomConfig.length - halfL));
             newZ = Math.max(halfW, Math.min(newZ, roomConfig.width - halfW));
 newY = Math.max(halfH, Math.min(newY, roomConfig.height - halfH));
-
+ 
             // Apply the clamped position
             mesh.position.set(newX, newY, newZ);
-
-
+ 
+ 
             // Update the underlying data
             const newPos = mesh.position;
             data.x = newPos.x;
@@ -376,20 +379,20 @@ newY = Math.max(halfH, Math.min(newY, roomConfig.height - halfH));
         renderObjectList(); // Update the UI panel
     }
 }
-
-
+ 
+ 
 // --- UI & EVENT LISTENERS ---
-
+ 
 let isRecording = false;
 const btnRecordLog = document.getElementById('btn-record-log');
 const logFileList = document.getElementById('log-file-list');
 let currentLogData = [];
-
+ 
 btnRecordLog.addEventListener('click', () => {
     isRecording = !isRecording;
     btnRecordLog.textContent = isRecording ? 'Stop' : 'Record';
     btnRecordLog.classList.toggle('active', isRecording);
-
+ 
     if (!isRecording && currentLogData.length > 0) {
         // Stop recording and generate file
         const csvContent = "data:text/csv;charset=utf-8," 
@@ -404,27 +407,27 @@ btnRecordLog.addEventListener('click', () => {
         const filename = `tag_log_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}.csv`;
         link.setAttribute("download", filename);
         link.textContent = filename;
-
+ 
         const listItem = document.createElement('li');
         listItem.appendChild(link);
         logFileList.appendChild(listItem);
-
+ 
         currentLogData = []; // Reset for next recording
          updateCollapsibleHeight(document.querySelector('#tag-history-section .collapsible-content'));
-
+ 
     } else if (isRecording) {
         // Start recording
         currentLogData = [];
     }
 });
-
-
+ 
+ 
 function updateCollapsibleHeight(content) {
     if (content && content.style.maxHeight && content.style.maxHeight !== '0px' && content.style.maxHeight !== 'fit-content') {
         content.style.maxHeight = content.scrollHeight + "px";
     }
 }
-
+ 
 function updateTable(tags) {
     const tbody = document.getElementById('tag-table-body');
     if (Object.keys(tags).length === 0) {
@@ -445,10 +448,10 @@ function updateTable(tags) {
         tbody.innerHTML += row;
     });
 }
-
+ 
 const anchorList = document.getElementById('anchor-list');
 const objectList = document.getElementById('object-list');
-
+ 
 function renderAnchorList() {
     anchorList.innerHTML = '';
     anchorsData.forEach((anchor, index) => {
@@ -463,7 +466,7 @@ function renderAnchorList() {
         `;
         anchorList.appendChild(item);
     });
-
+ 
     document.querySelectorAll('.btn-remove-anchor').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const index = parseInt(e.target.dataset.index);
@@ -472,7 +475,7 @@ function renderAnchorList() {
             renderAnchorList();
         });
     });
-
+ 
     document.querySelectorAll('#anchor-list input').forEach(input => {
         input.addEventListener('change', (e) => {
             const index = parseInt(e.target.dataset.index);
@@ -482,12 +485,12 @@ function renderAnchorList() {
         });
     });
 }
-
+ 
 function saveAnchors() {
     socket.emit('set_anchors', anchorsData);
     updateAnchors3D(anchorsData);
 }
-
+ 
 function renderObjectList() {
     objectList.innerHTML = '';
     objectsData.forEach((obj, index) => {
@@ -518,7 +521,7 @@ function renderObjectList() {
         `;
         objectList.appendChild(item);
     });
-
+ 
     document.querySelectorAll('.btn-remove-object').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const index = parseInt(e.target.dataset.index);
@@ -527,7 +530,7 @@ function renderObjectList() {
             updateObjects3D();
         });
     });
-
+ 
     document.querySelectorAll('.btn-duplicate-object').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const index = parseInt(e.target.dataset.index);
@@ -542,7 +545,7 @@ function renderObjectList() {
             }
         });
     });
-
+ 
     document.querySelectorAll('#object-list input').forEach(input => {
         input.addEventListener('change', (e) => {
             const index = parseInt(e.target.dataset.index);
@@ -552,26 +555,26 @@ function renderObjectList() {
         });
     });
 }
-
+ 
 document.getElementById('btn-add-anchor').addEventListener('click', () => {
     anchorsData.push({ id: anchorsData.length, x: 0, y: 0, z: 0 });
     renderAnchorList();
     saveAnchors();
     updateCollapsibleHeight(document.querySelector('#anchors-section .collapsible-content'));
-
+ 
 });
-
+ 
 document.getElementById('btn-add-object').addEventListener('click', () => {
     objectsData.push({ l: 1, w: 1, h: 1, x: 0, y: 0, z: 0 });
     renderObjectList();
     updateObjects3D();
     updateCollapsibleHeight(document.querySelector('#objects-section .collapsible-content'));
 });
-
+ 
 document.getElementById('inpL').addEventListener('change', updateRoom);
 document.getElementById('inpW').addEventListener('change', updateRoom);
 document.getElementById('inpH').addEventListener('change', updateRoom);
-
+ 
 function updateRoom() {
     const l = parseFloat(document.getElementById('inpL').value) || 10;
     const w = parseFloat(document.getElementById('inpW').value) || 8;
@@ -579,7 +582,7 @@ function updateRoom() {
     createRoom3D(l, w, h);
 socket.emit('update_room_config', { length: l, width: w, height: h });
 }
-
+ 
 // --- SOCKET LISTENERS ---
 socket.on('room_config_update', (cfg) => {
     roomConfig = cfg;
@@ -588,18 +591,18 @@ socket.on('room_config_update', (cfg) => {
     document.getElementById('inpW').value = cfg.width;
     document.getElementById('inpH').value = cfg.height;
 });
-
+ 
 socket.on('anchors_updated', (data) => {
     anchorsData = data;
     updateAnchors3D(data);
     renderAnchorList();
 });
-
+ 
 socket.on('tags_update', (data) => {
     tagDataStore = data;
     updateTags3D(data);
     updateTable(data);
-
+ 
     if (isRecording) {
         const now = new Date();
         const timestamp = now.toLocaleTimeString('it-IT'); // Use a consistent format
@@ -615,7 +618,7 @@ socket.on('tags_update', (data) => {
         });
     }
 });
-
+ 
 // --- ANIMATION LOOP & RESIZE ---
 function animate() {
     requestAnimationFrame(animate);
@@ -628,26 +631,26 @@ function animate() {
     axisRenderer.render(axisScene, axisCamera);
 }
 animate();
-
+ 
 window.addEventListener('resize', () => {
     const { clientWidth, clientHeight } = container;
     if (clientWidth === 0 || clientHeight === 0) return;
     camera.aspect = clientWidth / clientHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(clientWidth, clientHeight);
-
+ 
     axisCamera.aspect = axisContainer.clientWidth / axisContainer.clientHeight;
     axisCamera.updateProjectionMatrix();
     axisRenderer.setSize(axisContainer.clientWidth, axisContainer.clientHeight);
 });
-
+ 
 // --- PRESET WAREHOUSE LOGIC ---
 function loadMekongPreset() {
     document.getElementById('inpL').value = 15.0;
     document.getElementById('inpW').value = 30.0;
     document.getElementById('inpH').value = 5.0;
     updateRoom();
-
+ 
     let presetGroup = scene.getObjectByName('presetGroup');
     if (!presetGroup) {
         presetGroup = new THREE.Group();
@@ -657,7 +660,7 @@ function loadMekongPreset() {
     while (presetGroup.children.length > 0) {
         presetGroup.remove(presetGroup.children[0]);
     }
-
+ 
     function createSolidBox(color, x, z, sizeX, sizeZ, sizeY) {
         const geo = new THREE.BoxGeometry(sizeX, sizeY, sizeZ);
         const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.7 });
@@ -668,7 +671,7 @@ function loadMekongPreset() {
         mesh.position.set(x, sizeY / 2, z);
 presetGroup.add(mesh);
     }
-
+ 
     function createDetailedRack(x, z, sizeX, bayLength, bays, sizeY, tiers = 3, hasBoxes = false) {
         const rackGroup = new THREE.Group();
         const frameMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.6 }); 
@@ -678,7 +681,7 @@ presetGroup.add(mesh);
         const bottomTierY = sizeY * 0.15, topTierY = sizeY * 0.85; 
         const tierSpacing = (topTierY - bottomTierY) / (tiers - 1); 
         const totalZ = bays * bayLength;
-
+ 
         for (let j = 0; j <= bays; j++) {
             const isProtruding = (j % 2 === 0); 
             const pH = isProtruding ? sizeY : topTierY + shelfThick / 2; 
@@ -691,7 +694,7 @@ presetGroup.add(mesh);
                 rackGroup.add(pillar);
             }
         }
-
+ 
         const shelfGeo = new THREE.BoxGeometry(sizeX, shelfThick, bayLength);
         const shelfEdges = new THREE.EdgesGeometry(shelfGeo);
         const shelfLineMat = new THREE.LineBasicMaterial({ color: 0x552200, linewidth: 1 }); 
@@ -699,7 +702,7 @@ presetGroup.add(mesh);
         const boxGeo = new THREE.BoxGeometry(sizeX * 0.75, boxHeight, bayLength * 0.8);
         const boxEdges = new THREE.EdgesGeometry(boxGeo);
         const boxLineMat = new THREE.LineBasicMaterial({ color: 0x5c4033, linewidth: 1 }); 
-
+ 
         for (let j = 0; j < bays; j++) {
             const shelfZ = -totalZ/2 + j * bayLength + bayLength/2;
             for (let i = 0; i < tiers; i++) {
@@ -719,7 +722,7 @@ presetGroup.add(mesh);
         rackGroup.position.set(x, 0, z);
         presetGroup.add(rackGroup);
     }
-
+ 
     function createHangingLight(x, z, startY, endY) {
         const lightGroup = new THREE.Group();
         
@@ -729,27 +732,27 @@ const wireMat = new THREE.MeshBasicMaterial({ color: 0x333333 });
         const wire = new THREE.Mesh(wireGeo, wireMat);
         wire.position.set(0, endY + wireLen/2, 0); 
         lightGroup.add(wire);
-
+ 
         const shadeGeo = new THREE.ConeGeometry(0.25, 0.3, 16);
         const shadeMat = new THREE.MeshStandardMaterial({ color: 0x71717a, roughness: 0.4 }); 
         const shade = new THREE.Mesh(shadeGeo, shadeMat);
         shade.position.set(0, endY, 0);
         lightGroup.add(shade);
-
+ 
         const bulbGeo = new THREE.SphereGeometry(0.12, 16, 16);
         const bulbMat = new THREE.MeshBasicMaterial({ color: 0xfffbeb }); 
         const bulb = new THREE.Mesh(bulbGeo, bulbMat);
         bulb.position.set(0, endY - 0.1, 0);
         lightGroup.add(bulb);
-
+ 
         lightGroup.position.set(x, 0, z);
         presetGroup.add(lightGroup);
     }
-
+ 
     const rackWidth = 1.0; 
     const lowHeight = 2.8; 
     const highHeight = 3.0; 
-
+ 
     for(let i = 0; i < 3; i++) {
         const currentZ = 3.4 + i * 4.3; 
         createDetailedRack(2.4, currentZ, rackWidth, 1.0, 4, lowHeight, 3, false); 
@@ -758,7 +761,7 @@ const wireMat = new THREE.MeshBasicMaterial({ color: 0x333333 });
     createSolidBox(0x9ca3af, 4.4, 7.7, 0.8, 12.6, 0.5);
     createDetailedRack(7.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true);
     createDetailedRack(14.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true);
-
+ 
     const lineMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
     const wingGeo = new THREE.BoxGeometry(1.0, 2.5, 0.1);
     const commonDoorMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.5 });
@@ -768,37 +771,37 @@ const wireMat = new THREE.MeshBasicMaterial({ color: 0x333333 });
     const rightWing = new THREE.Mesh(wingGeo, commonDoorMat); rightWing.add(new THREE.LineSegments(wingEdges, lineMat));
     leftWing.position.set(1.0, 1.25, 29.95); presetGroup.add(leftWing);
     rightWing.position.set(2.0, 1.25, 29.95); presetGroup.add(rightWing);
-
+ 
     const rollGeo = new THREE.BoxGeometry(3.5, 3.5, 0.1);
     const rollEdges = new THREE.EdgesGeometry(rollGeo);
     const rollDoor1 = new THREE.Mesh(rollGeo, commonDoorMat); rollDoor1.add(new THREE.LineSegments(rollEdges, lineMat));
     const rollDoor2 = new THREE.Mesh(rollGeo, commonDoorMat); rollDoor2.add(new THREE.LineSegments(rollEdges, lineMat));
     rollDoor1.position.set(7.5, 1.75, 29.95); presetGroup.add(rollDoor1);
     rollDoor2.position.set(12.0, 1.75, 29.95); presetGroup.add(rollDoor2);
-
+ 
     const shellMat = new THREE.MeshStandardMaterial({ 
         color: 0xe5e7eb, roughness: 0.2, transparent: true, opacity: 0.3, side: THREE.DoubleSide 
     });
-
+ 
     const wallThick = 0.05;
     const wallHeight = 5.0;
     
     const leftWall = new THREE.Mesh(new THREE.BoxGeometry(wallThick, wallHeight, 30.0), shellMat);
 leftWall.position.set(0, wallHeight/2, 15.0);
     presetGroup.add(leftWall);
-
+ 
     const rightWall = new THREE.Mesh(new THREE.BoxGeometry(wallThick, wallHeight, 30.0), shellMat);
     rightWall.position.set(15.0, wallHeight/2, 15.0);
     presetGroup.add(rightWall);
-
+ 
     const backWall = new THREE.Mesh(new THREE.BoxGeometry(15.0, wallHeight, wallThick), shellMat);
     backWall.position.set(7.5, wallHeight/2, 0);
     presetGroup.add(backWall);
-
+ 
     const frontWall = new THREE.Mesh(new THREE.BoxGeometry(15.0, wallHeight, wallThick), shellMat);
     frontWall.position.set(7.5, wallHeight/2, 30.0);
     presetGroup.add(frontWall);
-
+ 
     const gableShape = new THREE.Shape();
     gableShape.moveTo(-7.5, 0);
     gableShape.lineTo(7.5, 0);
@@ -807,52 +810,52 @@ leftWall.position.set(0, wallHeight/2, 15.0);
     
     const gableGeo = new THREE.ExtrudeGeometry(gableShape, { depth: wallThick, bevelEnabled: false });
     gableGeo.translate(0, 0, -wallThick / 2);
-
+ 
     const backGable = new THREE.Mesh(gableGeo, shellMat);
     backGable.position.set(7.5, wallHeight, 0); 
     presetGroup.add(backGable);
-
+ 
     const frontGable = new THREE.Mesh(gableGeo, shellMat);
     frontGable.position.set(7.5, wallHeight, 30.0); 
     presetGroup.add(frontGable);
-
+ 
     const roofPeak = 2.5;  
     const halfW = 7.5;     
     const slantLen = Math.sqrt(halfW * halfW + roofPeak * roofPeak); 
     const roofAngle = Math.atan2(roofPeak, halfW);
-
+ 
     const roofGeo = new THREE.BoxGeometry(slantLen, 0.05, 30.0, 1, 1, 8); 
     const roofEdges = new THREE.EdgesGeometry(roofGeo);
     const trussMat = new THREE.LineBasicMaterial({ color: 0x374151, linewidth: 2 }); 
-
+ 
     const leftRoof = new THREE.Mesh(roofGeo, shellMat);
     leftRoof.add(new THREE.LineSegments(roofEdges, trussMat));
     leftRoof.position.set(halfW / 2, wallHeight + roofPeak / 2, 15.0);
     leftRoof.rotation.z = roofAngle;
     presetGroup.add(leftRoof);
-
+ 
     const rightRoof = new THREE.Mesh(roofGeo, shellMat);
     rightRoof.add(new THREE.LineSegments(roofEdges, trussMat));
     rightRoof.position.set(15.0 - halfW / 2, wallHeight + roofPeak / 2, 15.0);
     rightRoof.rotation.z = -roofAngle;
     presetGroup.add(rightRoof);
-
+ 
     for(let z = 3.75; z <= 27.0; z += 7.5) {
         createHangingLight(3.75, z, 6.25, 5.2);
         createHangingLight(7.5, z, 7.5, 5.2);
         createHangingLight(11.25, z, 6.25, 5.2);
     }
-
+ 
     camera.position.set(20, 20, 40);
     controls.target.set(7.5, 2.5, 15);
 }
-
-
+ 
+ 
 // --- UI LOGIC ---
 document.addEventListener('DOMContentLoaded', () => {
     const navLinks = document.querySelectorAll('.nav-link');
     const tabContents = document.querySelectorAll('#main-content .tab-content');
-
+ 
     function switchTab(tabId) {
         navLinks.forEach(navLink => {
             navLink.classList.remove('active');
@@ -860,15 +863,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 navLink.classList.add('active');
             }
         });
-tabContents.forEach(tabContent => {
+        tabContents.forEach(tabContent => {
             tabContent.classList.remove('active');
             if (tabContent.id === tabId) {
                 tabContent.classList.add('active');
             }
         });
-
+ 
         if (tabId === 'tab-3d') {
             setTimeout(() => {
+                // Resize renderer theo kích thước thật của container
                 const w = container.clientWidth || window.innerWidth - 260;
                 const h = container.clientHeight || window.innerHeight - 56;
                 renderer.setSize(w, h);
@@ -880,7 +884,8 @@ tabContents.forEach(tabContent => {
                 }
             }, 80);
         }
-
+    }
+ 
     navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
@@ -890,28 +895,28 @@ tabContents.forEach(tabContent => {
     });
     
     // Initial Load
-   const initialTab = 'tab-dashboard';
+    const initialTab = 'tab-dashboard';
     switchTab(initialTab);
 });
-
-
+ 
+ 
 // --- Floating Panel Logic ---
 const settingsBtn = document.getElementById('btn-settings');
 const closePanelBtn = document.getElementById('btn-close-panel');
 const floatingPanel = document.getElementById('floating-panel');
 const panelHeader = document.querySelector('.panel-header');
-
+ 
 settingsBtn.addEventListener('click', () => {
     floatingPanel.style.display = 'flex';
 });
-
+ 
 closePanelBtn.addEventListener('click', () => {
     floatingPanel.style.display = 'none';
 });
-
+ 
 let isDragging = false;
 let startX, startY, initialX, initialY;
-
+ 
 panelHeader.addEventListener('mousedown', (e) => {
     isDragging = true;
     startX = e.clientX;
@@ -920,7 +925,7 @@ panelHeader.addEventListener('mousedown', (e) => {
     initialY = floatingPanel.offsetTop;
     panelHeader.style.cursor = 'grabbing';
 });
-
+ 
 document.addEventListener('mousemove', (e) => {
     if (!isDragging) return;
     const dx = e.clientX - startX;
@@ -928,18 +933,18 @@ document.addEventListener('mousemove', (e) => {
     floatingPanel.style.left = (initialX + dx) + 'px';
     floatingPanel.style.top = (initialY + dy) + 'px';
 });
-
+ 
 document.addEventListener('mouseup', () => {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
 });
-
+ 
 // Switch between 3D and 2D modes
 const btn3d = document.getElementById('btn-mode-3d');
 const btn2d = document.getElementById('btn-mode-2d');
 const sceneContainer = document.getElementById('scene-container');
 const mapContainer = document.getElementById('map-2d-container');
-
+ 
 btn3d.addEventListener('click', () => {
     sceneContainer.style.display = 'block';
     mapContainer.style.display = 'none';
@@ -947,7 +952,7 @@ btn3d.addEventListener('click', () => {
     btn3d.classList.add('active');
     btn2d.classList.remove('active');
 });
-
+ 
 btn2d.addEventListener('click', () => {
     sceneContainer.style.display = 'none';
     mapContainer.style.display = 'flex';
@@ -956,7 +961,7 @@ btn2d.addEventListener('click', () => {
     btn3d.classList.remove('active');
     window.dispatchEvent(new Event('resize'));
 });
-
+ 
 // Collapsible sections
 const collapsibles = document.querySelectorAll('.collapsible');
 collapsibles.forEach(coll => {
@@ -970,11 +975,11 @@ coll.addEventListener('click', () => {
         }
     });
 });
-
+ 
 // ══════════════════════════════════════════════
 // MODAL & CRUD MANAGEMENT LOGIC
 // ══════════════════════════════════════════════
-
+ 
 // --- Dữ liệu lưu trong bộ nhớ ---
 const store = {
     employees: [],
@@ -983,12 +988,12 @@ const store = {
     receipts: [],
     deliveries: []
 };
-
+ 
 // --- Tiện ích tạo ID ---
 function genId(prefix) {
     return prefix + '-' + Date.now().toString().slice(-5);
 }
-
+ 
 // --- Mở / đóng modal ---
 function openModal(id) {
     document.getElementById(id).classList.add('open');
@@ -996,7 +1001,7 @@ function openModal(id) {
 function closeModal(id) {
     document.getElementById(id).classList.remove('open');
 }
-
+ 
 // Gán nút đóng cho tất cả modal
 document.querySelectorAll('.modal-close, .btn-secondary-outline[data-modal]').forEach(btn => {
     btn.addEventListener('click', () => closeModal(btn.dataset.modal));
@@ -1006,36 +1011,36 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
         if (e.target === overlay) closeModal(overlay.id);
     });
 });
-
+ 
 // --- Set ngày mặc định cho các input date ---
 function setTodayDate(...ids) {
     const today = new Date().toISOString().split('T')[0];
     ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = today; });
 }
-
+ 
 // ══ NHÂN VIÊN ══
 document.getElementById('btn-add-employee').addEventListener('click', () => {
     openModal('modal-employee');
 });
-
+ 
 document.getElementById('btn-save-employee').addEventListener('click', () => {
     const name   = document.getElementById('emp-name').value.trim();
     const role   = document.getElementById('emp-role').value.trim();
     const status = document.getElementById('emp-status').value;
     const tag    = document.getElementById('emp-tag').value.trim();
-
+ 
     if (!name || !role) { alert('Vui lòng nhập Tên và Chức vụ!'); return; }
-
+ 
     const emp = { id: genId('NV'), name, role, status, tag: tag || '—' };
     store.employees.push(emp);
     renderEmployees();
     closeModal('modal-employee');
-
+ 
     // Reset form
     ['emp-name','emp-role','emp-tag'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('emp-status').value = 'active';
 });
-
+ 
 function renderEmployees() {
     const tbody = document.getElementById('employee-tbody');
     const search = (document.getElementById('employee-search').value || '').toLowerCase();
@@ -1055,32 +1060,32 @@ function renderEmployees() {
         </tr>
     `).join('') || '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:24px">Chưa có nhân viên nào</td></tr>';
 }
-
+ 
 document.getElementById('employee-search').addEventListener('input', renderEmployees);
-
+ 
 // ══ XE NÂNG ══
 document.getElementById('btn-add-forklift').addEventListener('click', () => {
     openModal('modal-forklift');
 });
-
+ 
 document.getElementById('btn-save-forklift').addEventListener('click', () => {
     const fid      = document.getElementById('fl-id').value.trim();
     const type     = document.getElementById('fl-type').value;
     const status   = document.getElementById('fl-status').value;
     const tag      = document.getElementById('fl-tag').value.trim();
     const location = document.getElementById('fl-location').value.trim();
-
+ 
     if (!fid) { alert('Vui lòng nhập ID xe nâng!'); return; }
-
+ 
     const fl = { id: fid, type, status, location: location || '—', tag: tag || '—' };
     store.forklifts.push(fl);
     renderForklifts();
     closeModal('modal-forklift');
-
+ 
     ['fl-id','fl-tag','fl-location'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('fl-status').value = 'active';
 });
-
+ 
 function renderForklifts() {
     const tbody = document.getElementById('forklift-tbody');
     const search = (document.getElementById('forklift-search').value || '').toLowerCase();
@@ -1100,14 +1105,14 @@ function renderForklifts() {
         </tr>
     `).join('') || '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:24px">Chưa có xe nâng nào</td></tr>';
 }
-
+ 
 document.getElementById('forklift-search').addEventListener('input', renderForklifts);
-
+ 
 // ══ SKU ══
 document.getElementById('btn-add-sku').addEventListener('click', () => {
     openModal('modal-sku');
 });
-
+ 
 document.getElementById('btn-save-sku').addEventListener('click', () => {
     const code     = document.getElementById('sku-code').value.trim();
     const name     = document.getElementById('sku-name').value.trim();
@@ -1116,18 +1121,18 @@ const unit     = document.getElementById('sku-unit').value.trim();
     const minStock = parseInt(document.getElementById('sku-min-stock').value) || 0;
     const price    = parseInt(document.getElementById('sku-price').value) || 0;
     const location = document.getElementById('sku-location').value.trim();
-
+ 
     if (!code || !name) { alert('Vui lòng nhập Mã SKU và Tên hàng hóa!'); return; }
-
+ 
     const sku = { code, name, unit: unit || '—', stock, minStock, price, location: location || '—' };
     store.skus.push(sku);
     renderSkus();
     closeModal('modal-sku');
-
+ 
     ['sku-code','sku-name','sku-unit','sku-stock','sku-min-stock','sku-price','sku-location']
         .forEach(id => document.getElementById(id).value = '');
 });
-
+ 
 function renderSkus() {
     const tbody  = document.getElementById('sku-tbody');
     const search = (document.getElementById('sku-search').value || '').toLowerCase();
@@ -1137,7 +1142,7 @@ function renderSkus() {
     );
     if (filter === 'low-stock') rows = rows.filter(s => s.stock > 0 && s.stock <= s.minStock);
     if (filter === 'out-of-stock') rows = rows.filter(s => s.stock === 0);
-
+ 
     const fmt = n => n.toLocaleString('vi-VN');
     tbody.innerHTML = rows.map(s => `
         <tr>
@@ -1155,17 +1160,17 @@ function renderSkus() {
         </tr>
     `).join('') || '<tr><td colspan="9" style="text-align:center;color:#aaa;padding:24px">Chưa có hàng hóa nào</td></tr>';
 }
-
+ 
 document.getElementById('sku-search').addEventListener('input', renderSkus);
 document.getElementById('sku-filter').addEventListener('change', renderSkus);
-
+ 
 // ══ PHIẾU NHẬP ══
 document.getElementById('btn-create-receipt').addEventListener('click', () => {
     setTodayDate('rec-date');
     document.getElementById('rec-code').value = 'PN-' + new Date().getFullYear() + '-' + String(store.receipts.length + 1).padStart(3,'0');
     openModal('modal-receipt');
 });
-
+ 
 document.getElementById('btn-save-receipt').addEventListener('click', () => {
     const code     = document.getElementById('rec-code').value.trim();
     const date     = document.getElementById('rec-date').value;
@@ -1173,15 +1178,15 @@ document.getElementById('btn-save-receipt').addEventListener('click', () => {
     const status   = document.getElementById('rec-status').value;
     const value    = parseInt(document.getElementById('rec-value').value) || 0;
 if (!code || !supplier) { alert('Vui lòng nhập Mã phiếu và Nhà cung cấp!'); return; }
-
+ 
     store.receipts.push({ code, date, supplier, status, value });
     renderReceipts();
     closeModal('modal-receipt');
-
+ 
     ['rec-code','rec-date','rec-supplier','rec-value'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('rec-status').value = 'pending';
 });
-
+ 
 function renderReceipts() {
     const tbody = document.getElementById('receipt-tbody');
     const fmt = n => n.toLocaleString('vi-VN');
@@ -1198,30 +1203,30 @@ function renderReceipts() {
         </tr>
     `).join('') || '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:24px">Chưa có phiếu nhập nào</td></tr>';
 }
-
+ 
 // ══ PHIẾU XUẤT ══
 document.getElementById('btn-create-delivery').addEventListener('click', () => {
     setTodayDate('del-date');
     document.getElementById('del-code').value = 'PX-' + new Date().getFullYear() + '-' + String(store.deliveries.length + 1).padStart(3,'0');
     openModal('modal-delivery');
 });
-
+ 
 document.getElementById('btn-save-delivery').addEventListener('click', () => {
     const code     = document.getElementById('del-code').value.trim();
     const date     = document.getElementById('del-date').value;
     const customer = document.getElementById('del-customer').value.trim();
     const status   = document.getElementById('del-status').value;
-
+ 
     if (!code || !customer) { alert('Vui lòng nhập Mã phiếu và Khách hàng!'); return; }
-
+ 
     store.deliveries.push({ code, date, customer, status });
     renderDeliveries();
     closeModal('modal-delivery');
-
+ 
     ['del-code','del-date','del-customer'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('del-status').value = 'pending';
 });
-
+ 
 function renderDeliveries() {
     const tbody = document.getElementById('delivery-tbody');
     tbody.innerHTML = store.deliveries.map(d => `
@@ -1236,19 +1241,17 @@ function renderDeliveries() {
         </tr>
 `).join('') || '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:24px">Chưa có phiếu xuất nào</td></tr>';
 }
-
+ 
 // ══ XÓA ITEM ══
 window.deleteItem = function(storeKey, id, renderFn, idField = 'id') {
     if (!confirm('Xác nhận xóa?')) return;
     store[storeKey] = store[storeKey].filter(item => item[idField] !== id);
     renderFn();
 };
-
+ 
 // Expose render functions to global scope for onclick handlers
 window.renderEmployees = renderEmployees;
 window.renderForklifts = renderForklifts;
 window.renderSkus = renderSkus;
 window.renderReceipts = renderReceipts;
 window.renderDeliveries = renderDeliveries;
-
-Cái này là client
