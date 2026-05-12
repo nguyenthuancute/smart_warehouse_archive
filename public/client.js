@@ -945,22 +945,40 @@ const btn2d = document.getElementById('btn-mode-2d');
 const sceneContainer = document.getElementById('scene-container');
 const mapContainer = document.getElementById('map-2d-container');
  
-btn3d.addEventListener('click', () => {
+function showWarehouse3D() {
+    document.getElementById('warehouse-splash').style.display = 'none';
     sceneContainer.style.display = 'block';
     mapContainer.style.display = 'none';
     axisContainer.style.display = 'block';
     btn3d.classList.add('active');
     btn2d.classList.remove('active');
-});
- 
-btn2d.addEventListener('click', () => {
+    setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+        if (!scene.getObjectByName('presetGroup')) {
+            loadMekongPreset();
+        }
+        renderer.setSize(sceneContainer.clientWidth, sceneContainer.clientHeight);
+        camera.aspect = sceneContainer.clientWidth / sceneContainer.clientHeight;
+        camera.updateProjectionMatrix();
+    }, 80);
+}
+
+function showWarehouse2D() {
+    document.getElementById('warehouse-splash').style.display = 'none';
     sceneContainer.style.display = 'none';
     mapContainer.style.display = 'flex';
     axisContainer.style.display = 'none';
     btn2d.classList.add('active');
     btn3d.classList.remove('active');
     window.dispatchEvent(new Event('resize'));
-});
+}
+
+btn3d.addEventListener('click', showWarehouse3D);
+btn2d.addEventListener('click', showWarehouse2D);
+
+// Nút trên màn hình splash
+document.getElementById('splash-btn-3d').addEventListener('click', showWarehouse3D);
+document.getElementById('splash-btn-2d').addEventListener('click', showWarehouse2D);
  
 // Collapsible sections
 const collapsibles = document.querySelectorAll('.collapsible');
