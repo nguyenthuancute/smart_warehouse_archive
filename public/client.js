@@ -7,13 +7,16 @@ const socket = io();
 const container = document.getElementById('scene-container');
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1a1a2e);
-
-const camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
+ 
+const initW = container.clientWidth || window.innerWidth - 260;
+const initH = container.clientHeight || window.innerHeight - 56;
+ 
+const camera = new THREE.PerspectiveCamera(60, initW / initH, 0.1, 1000);
 camera.position.set(15, 20, 15);
 camera.lookAt(0, 0, 0);
-
+ 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(container.clientWidth, container.clientHeight);
+renderer.setSize(initW, initH);
 container.appendChild(renderer.domElement);
 
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
@@ -866,13 +869,17 @@ tabContents.forEach(tabContent => {
 
         if (tabId === 'tab-3d') {
             setTimeout(() => {
+                const w = container.clientWidth || window.innerWidth - 260;
+                const h = container.clientHeight || window.innerHeight - 56;
+                renderer.setSize(w, h);
+                camera.aspect = w / h;
+                camera.updateProjectionMatrix();
                 window.dispatchEvent(new Event('resize'));
                 if (!scene.getObjectByName('presetGroup')) {
                     loadMekongPreset();
                 }
-            }, 50);
+            }, 80);
         }
-    }
 
     navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
@@ -883,7 +890,7 @@ tabContents.forEach(tabContent => {
     });
     
     // Initial Load
-    const initialTab = 'tab-3d';
+   const initialTab = 'tab-dashboard';
     switchTab(initialTab);
 });
 
