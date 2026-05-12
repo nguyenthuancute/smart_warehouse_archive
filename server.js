@@ -249,6 +249,41 @@ app.post('/api/products', requireAdmin, (req, res) => {
     res.json(product);
 });
 
+// --- API THÙNG HÀNG 3D ---
+if (!db.boxes) db.boxes = [];
+
+app.get('/api/boxes', requireLogin, (req, res) => res.json(db.boxes));
+
+app.post('/api/boxes', requireAdmin, (req, res) => {
+    const { boxId, name, sku, quantity, weight, note, location } = req.body;
+    if (!boxId) return res.status(400).json({ error: 'Thiếu boxId' });
+    const existing = db.boxes.find(b => b.boxId === boxId);
+    if (existing) return res.status(400).json({ error: 'Box ID đã tồn tại' });
+    const box = { boxId, name: name || '', sku: sku || '', quantity: quantity || 0, weight: weight || 0, note: note || '', location: location || '', updatedAt: new Date().toISOString() };
+    db.boxes.push(box);
+    saveDB(db);
+    io.emit('boxes_updated', db.boxes);
+    res.json(box);
+});
+
+app.put('/api/boxes/:boxId', requireAdmin, (req, res) => {
+    const box = db.boxes.find(b => b.boxId === req.params.boxId);
+    if (!box) return res.status(404).json({ error: 'Không tìm thấy thùng hàng' });
+    Object.assign(box, req.body, { updatedAt: new Date().toISOString() });
+    saveDB(db);
+    io.emit('boxes_updated', db.boxes);
+    res.json(box);
+});
+
+app.delete('/api/boxes/:boxId', requireAdmin, (req, res) => {
+    const idx = db.boxes.findIndex(b => b.boxId === req.params.boxId);
+    if (idx === -1) return res.status(404).json({ error: 'Không tìm thấy thùng hàng' });
+    db.boxes.splice(idx, 1);
+    saveDB(db);
+    io.emit('boxes_updated', db.boxes);
+    res.json({ success: true });
+});
+
 app.get('/api/receipts', requireLogin, (req, res) => res.json(db.receipts));
 app.post('/api/receipts', requireAdmin, (req, res) => {
     const receipt = { id: 'PN-' + Date.now(), createdAt: new Date().toISOString(), ...req.body };
