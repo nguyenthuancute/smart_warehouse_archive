@@ -155,13 +155,16 @@ container.addEventListener('click', (event) => {
 
     raycaster.setFromCamera(mouse, camera);
 
-    // Kiểm tra click vào thùng hàng preset (có boxId)
+   // Kiểm tra click vào thùng hàng preset (có boxId)
     const presetGroup = scene.getObjectByName('presetGroup');
     if (presetGroup) {
         const allMeshes = [];
         presetGroup.traverse(obj => { if (obj.isMesh && obj.userData.isBox) allMeshes.push(obj); });
         const boxHits = raycaster.intersectObjects(allMeshes, false);
         if (boxHits.length > 0) {
+            // YÊU CẦU 3: Chặn hiển thị thông tin nếu đang ở chế độ Picking
+            if (isPickingMode) return; 
+
             const hit = boxHits[0].object;
             openBoxPopup(hit.userData.boxId, event.clientX, event.clientY);
             return;
@@ -1508,3 +1511,109 @@ if (typeof io !== 'undefined') {
         boxes.forEach(b => { boxesData[b.boxId] = b; });
     });
 }
+// ══════════════════════════════════════════════
+// TÍNH NĂNG: TỐI ƯU LỘ TRÌNH PICKING
+// ══════════════════════════════════════════════
+
+const btnOpenPicking = document.getElementById('btn-open-picking');
+const pickingPanel = document.getElementById('picking-panel');
+const btnClosePicking = document.getElementById('btn-close-picking');
+const btnCalcRoute = document.getElementById('btn-calc-route');
+
+// Mở Panel và tự động chuyển sang Tab 3D
+btnOpenPicking.addEventListener('click', (e) => {
+    e.preventDefault();
+    document.querySelector('[data-tab="tab-3d"]').click(); // Force switch to 3D tab
+    pickingPanel.style.display = 'flex';
+});
+
+// Đóng Panel và thoát chế độ Picking
+btnClosePicking.addEventListener('click', () => {
+    pickingPanel.style.display = 'none';
+    isPickingMode = false;
+    if (currentRouteLine) {
+        scene.remove(currentRouteLine);
+        currentRouteLine = null;
+    }
+});
+
+// Xử lý tìm đường và vẽ 3D
+btnCalcRoute.addEventListener('click', () => {
+    const inputVal = document.getElementById('picking-input').value;
+    if (!inputVal) return alert('Vui lòng nhập hàng hóa cần picking!');
+
+    const targets = inputVal.split(',').map(s => s.trim().toLowerCase());
+    
+    // Tọa độ cửa kho mặc định (Lấy theo setup loadMekongPreset của bạn)
+    const startPoint = new THREE.Vector3(7.5, 0.5, 29.95);
+    let pointsToVisit = [startPoint];
+
+    // YÊU CẦU 3: Đồng bộ dữ liệu với boxesData & boxMeshMap
+    targets.forEach(target => {
+        let foundBoxId = null;
+        
+        // 1. Tìm BoxId dựa trên đầu vào (so sánh ID hoặc SKU)
+        for (const [bId, bData] of Object.entries(boxesData)) {
+            if (bId.toLowerCase() === target || (bData.sku && bData.sku.toLowerCase() === target)) {
+                foundBoxId = bId;
+                break;
+            }
+        }
+
+        // 2. Lấy tọa độ 3D (Mesh) thực tế trong kho từ boxMeshMap
+        if (foundBoxId) {
+            const mappedObj = boxMeshMap.find(b => b.boxId === foundBoxId);
+            if (mappedObj && mappedObj.mesh) {
+                const pos = new THREE.Vector3();
+                mappedObj.mesh.getWorldPosition(pos); // Lấy toạ độ tuyệt đối
+                pointsToVisit.push(pos);
+            }
+        }
+    });
+
+    if (pointsToVisit.length <= 1) {
+        return alert("Không tìm thấy hàng hóa nào trong kho 3D khớp với dữ liệu (SKU/BoxID) bạn nhập.");
+    }
+
+    // Bật chế độ chặn click popup
+    isPickingMode = true;
+
+    // THUẬT TOÁN NEAREST NEIGHBOR (Giải bài toán TSP cơ bản cho 1/nhiều hàng)
+    let optimizedPath = [pointsToVisit[0]];
+    let unvisited = pointsToVisit.slice(1);
+    let currentPos = pointsToVisit[0];
+
+    while(unvisited.length > 0) {
+        let nearestIdx = 0;
+        let minDist = currentPos.distanceTo(unvisited[0]);
+        for(let i = 1; i < unvisited.length; i++) {
+            let dist = currentPos.distanceTo(unvisited[i]);
+            if(dist < minDist) {
+                minDist = dist;
+                nearestIdx = i;
+            }
+        }
+        currentPos = unvisited[nearestIdx];
+        optimizedPath.push(currentPos);
+        unvisited.splice(nearestIdx, 1);
+    }
+
+    // VẼ ĐƯỜNG ĐI TRONG THREE.JS
+    if (currentRouteLine) scene.remove(currentRouteLine);
+
+    const routeMaterial = new THREE.LineBasicMaterial({
+        color: 0x10b981, // Màu xanh lá nổi bật
+        linewidth: 4
+    });
+
+    // Gom các điểm lại và nâng lên 1 chút khỏi mặt đất để không bị lấp
+    const curvePoints = optimizedPath.map(p => new THREE.Vector3(p.x, p.y + 0.5, p.z));
+    const routeGeometry = new THREE.BufferGeometry().setFromPoints(curvePoints);
+    currentRouteLine = new THREE.Line(routeGeometry, routeMaterial);
+    
+    scene.add(currentRouteLine);
+    
+    // Tự động tắt Splash Screen và focus 3D nếu chưa tắt
+    document.getElementById('warehouse-splash').style.display = 'none';
+    document.getElementById('scene-container').style.display = 'block';
+});
