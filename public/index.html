@@ -48,7 +48,6 @@
 </head>
 <body>
     <div id="app-container">
-        <!-- ══ SIDEBAR ══ -->
         <div id="sidebar">
            <div class="sidebar-header">
     <span style="color: #ffffff; font-weight: 700;">Insite</span>
@@ -62,12 +61,11 @@
                 <li><a href="#" class="nav-link" data-tab="tab-receipt">Nhập</a></li>
                 <li><a href="#" class="nav-link" data-tab="tab-delivery">Xuất</a></li>
                 <li><a href="#" class="nav-link" data-tab="tab-log">Quản lý lịch sử di chuyển</a></li>
+                <li><a href="#" class="nav-link" id="btn-open-picking">📍 Lộ trình Picking</a></li>
             </ul>
         </div>
 
-        <!-- ══ MAIN CONTENT ══ -->
         <div id="main-content">
-            <!-- ══ TAB: DASHBOARD ══ -->
             <div id="tab-dashboard" class="tab-content active">
                 <div class="mgmt-header">
                     <h1>Dashboard</h1>
@@ -94,12 +92,10 @@
                 </div>
             </div>
 
-            <!-- ══ TAB: 3D WAREHOUSE ══ -->
             <div id="tab-3d" class="tab-content">
                 <div class="main-header">
                     <div class="header-left">
-                        <!-- Intentionally left blank -->
-                    </div>
+                        </div>
                     <div class="header-right">
                         <input type="text" id="sku-search-3d" placeholder="Tìm kiếm SKU...">
                         <button id="btn-settings">Cài đặt</button>
@@ -111,7 +107,6 @@
                 </div>
 
                 <div id="scene-container-wrapper">
-    <!-- Màn hình chào chờ load -->
     <div id="warehouse-splash">
         <div class="splash-inner">
             <div class="splash-icon"></div>
@@ -134,14 +129,12 @@
     </div>
     <div id="axis-container"></div>
 
-                    <!-- Floating Settings Panel -->
                     <div id="floating-panel" style="display: none;">
                         <div class="panel-header">
                             <h3>Bảng điều khiển</h3>
                             <button id="btn-close-panel">&times;</button>
                         </div>
                         <div class="panel-content">
-                            <!-- Room Config -->
                             <div class="panel-section">
                                 <h2 class="collapsible active">Cấu hình Kho</h2>
                                 <div class="collapsible-content" style="max-height: fit-content;">
@@ -152,7 +145,6 @@
                                     </div>
                                 </div>
                             </div>
-                            <!-- Anchor Management -->
                             <div id="anchors-section" class="panel-section">
                                 <h2 class="collapsible">Quản lý Anchor</h2>
                                 <div class="collapsible-content">
@@ -160,7 +152,6 @@
                                     <button id="btn-add-anchor" class="btn-secondary">Thêm Anchor</button>
                                 </div>
                             </div>
-                            <!-- Object Management -->
                             <div id="objects-section" class="panel-section">
                                 <h2 class="collapsible">Vật thể</h2>
                                 <div class="collapsible-content">
@@ -168,7 +159,6 @@
                                     <button id="btn-add-object" class="btn-secondary">Thêm vật thể</button>
                                 </div>
                             </div>
-                            <!-- Tag Real-time -->
                             <div class="panel-section">
                                 <h2 class="collapsible active">Tags Real-time <button id="btn-record-log" class="btn-secondary sm">Record</button></h2>
 <div class="collapsible-content" style="max-height: fit-content;">
@@ -180,7 +170,6 @@
                                     </div>
                                 </div>
                             </div>
-                            <!-- Tag History -->
                             <div id="tag-history-section" class="panel-section">
                                 <h2 class="collapsible">Tag History</h2>
                                 <div class="collapsible-content">
@@ -189,10 +178,24 @@
                             </div>
                         </div>
                     </div>
+
+                    <div id="picking-panel" class="floating-panel" style="display: none; position: absolute; top: 20px; right: 20px; width: 320px; background-color: var(--bg-med, #fff); border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); z-index: 50; flex-direction: column;">
+                        <div class="panel-header" style="background-color: #10b981; color: white; display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; border-top-left-radius: 8px; border-top-right-radius: 8px;">
+                            <h3 style="color: white; margin: 0; font-size: 1em;">Tối ưu lộ trình Picking</h3>
+                            <button id="btn-close-picking" style="background:none; border:none; color:white; font-size:1.4em; cursor:pointer; line-height: 1;">&times;</button>
+                        </div>
+                        <div class="panel-content" style="padding: 15px;">
+                            <div class="form-group" style="margin-bottom: 15px;">
+                                <label style="display: block; font-size: 0.85em; font-weight: 600; margin-bottom: 8px; color: #374151;">Nhập Box ID hoặc SKU (cách nhau dấu phẩy):</label>
+                                <textarea id="picking-input" placeholder="VD: R-B1T1, SKU-00001, RA-B2T3" rows="3" style="width: 100%; padding: 8px 11px; border: 1px solid #dee2e6; border-radius: 5px; box-sizing: border-box; font-family: inherit; font-size: 0.9em; resize: vertical;"></textarea>
+                            </div>
+                            <button id="btn-calc-route" class="btn-primary" style="width: 100%; background-color: #10b981; border: none; padding: 10px; border-radius: 5px; color: white; font-weight: bold; cursor: pointer; transition: opacity 0.2s;">Hiển thị đường đi 3D</button>
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
-            <!-- ══ TAB: EMPLOYEE MANAGEMENT ══ -->
             <div id="tab-employee" class="tab-content mgmt-tab">
                 <div class="mgmt-header">
                     <div>
@@ -217,13 +220,11 @@
                             </tr>
                         </thead>
                         <tbody id="employee-tbody">
-                           <!-- Rows will be added dynamically -->
-                        </tbody>
+                           </tbody>
                     </table>
                 </div>
             </div>
 
-            <!-- ══ TAB: FORKLIFT MANAGEMENT ══ -->
             <div id="tab-forklift" class="tab-content mgmt-tab">
                 <div class="mgmt-header">
                     <div>
@@ -248,13 +249,11 @@
                             </tr>
                         </thead>
                         <tbody id="forklift-tbody">
-                           <!-- Rows will be added dynamically -->
-                        </tbody>
+                           </tbody>
                     </table>
                 </div>
             </div>
 
-            <!-- ══ TAB: SKU MANAGEMENT ══ -->
             <div id="tab-sku" class="tab-content mgmt-tab">
                 <div class="mgmt-header">
                     <div>
@@ -291,7 +290,6 @@
                 </div>
             </div>
             
-            <!-- ══ TAB: RECEIPT MANAGEMENT ══ -->
             <div id="tab-receipt" class="tab-content mgmt-tab">
                  <div class="mgmt-header">
                     <div>
@@ -313,13 +311,11 @@
                             </tr>
                         </thead>
                         <tbody id="receipt-tbody">
-                            <!-- Rows will be added dynamically -->
-                        </tbody>
+                            </tbody>
                     </table>
                 </div>
             </div>
 
-            <!-- ══ TAB: DELIVERY MANAGEMENT ══ -->
             <div id="tab-delivery" class="tab-content mgmt-tab">
                 <div class="mgmt-header">
                     <div>
@@ -344,7 +340,6 @@
                 </div>
             </div>
             
-            <!-- ══ TAB: MOVEMENT HISTORY ══ -->
             <div id="tab-log" class="tab-content mgmt-tab">
                 <div class="mgmt-header">
                     <div>
@@ -372,7 +367,6 @@
 
     </div>
 
-    <!-- ══ MODAL: THÊM NHÂN VIÊN ══ -->
     <div id="modal-employee" class="modal-overlay">
         <div class="modal-box">
             <button class="modal-close" data-modal="modal-employee">&times;</button>
@@ -407,7 +401,6 @@
         </div>
     </div>
 
-    <!-- ══ MODAL: THÊM XE NÂNG ══ -->
     <div id="modal-forklift" class="modal-overlay">
         <div class="modal-box">
             <button class="modal-close" data-modal="modal-forklift">&times;</button>
@@ -451,7 +444,6 @@
         </div>
     </div>
 
-    <!-- ══ MODAL: THÊM SKU ══ -->
     <div id="modal-sku" class="modal-overlay">
         <div class="modal-box">
             <button class="modal-close" data-modal="modal-sku">&times;</button>
@@ -497,7 +489,6 @@
         </div>
     </div>
 
-    <!-- ══ MODAL: TẠO PHIẾU NHẬP ══ -->
     <div id="modal-receipt" class="modal-overlay">
         <div class="modal-box">
             <button class="modal-close" data-modal="modal-receipt">&times;</button>
@@ -536,7 +527,6 @@
         </div>
     </div>
 
-    <!-- ══ MODAL: TẠO PHIẾU XUẤT ══ -->
     <div id="modal-delivery" class="modal-overlay">
         <div class="modal-box">
             <button class="modal-close" data-modal="modal-delivery">&times;</button>
@@ -569,7 +559,6 @@
         </div>
     </div>
 
-    <!-- Context Menu -->
     <ul id="context-menu" class="context-menu" style="display: none;">
         <li id="ctx-duplicate">Duplicate</li>
         <li id="ctx-delete">Delete</li>
