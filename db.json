@@ -1,0 +1,16 @@
+{
+  "products": [],
+  "receipts": [],
+  "deliveries": [],
+  "auditLog": [],
+  "users": [
+    {
+      "id": "U-default",
+      "username": "admin",
+      "password": "$2a$10$fuuMUrlL/zwMbGU666xpDe/IFtqfnOBITIFcugKvoZMU8Q77TMCFC",
+      "role": "admin",
+      "createdAt": "2026-05-13T10:19:43.970Z"
+    }
+  ],
+  "boxes": []
+}

@@ -155,20 +155,18 @@ container.addEventListener('click', (event) => {
 
     raycaster.setFromCamera(mouse, camera);
 
-   // Kiểm tra click vào thùng hàng preset (có boxId)
     const presetGroup = scene.getObjectByName('presetGroup');
-    if (presetGroup) {
-        const allMeshes = [];
-        presetGroup.traverse(obj => { if (obj.isMesh && obj.userData.isBox) allMeshes.push(obj); });
-        const boxHits = raycaster.intersectObjects(allMeshes, false);
-        if (boxHits.length > 0) {
-            // YÊU CẦU 3: Chặn hiển thị thông tin nếu đang ở chế độ Picking
-            if (isPickingMode) return; 
+    const dynamicBoxGroup = scene.getObjectByName('dynamicBoxGroup');
+    const allMeshes = [];
 
-            const hit = boxHits[0].object;
-            openBoxPopup(hit.userData.boxId, event.clientX, event.clientY);
-            return;
-        }
+    if (presetGroup) presetGroup.traverse(obj => { if (obj.isMesh && obj.userData.isBox) allMeshes.push(obj); });
+    if (dynamicBoxGroup) dynamicBoxGroup.traverse(obj => { if (obj.isMesh && obj.userData.isBox) allMeshes.push(obj); });
+
+    const boxHits = raycaster.intersectObjects(allMeshes, false);
+    if (boxHits.length > 0) {
+        if (typeof isPickingMode !== 'undefined' && isPickingMode) return; 
+        openBoxPopup(boxHits[0].object.userData.boxId, event.clientX, event.clientY);
+        return;
     }
 
     const intersects = raycaster.intersectObjects(objectGroup.children);
@@ -775,14 +773,12 @@ presetGroup.add(mesh);
                 if (hasBoxes) {
                     const boxId = `${rackId}-B${j+1}T${i+1}`;
                     const boxInfo = boxesData[boxId] || {};
-                    const labelTex = makeBoxLabelTexture(boxId, boxInfo.sku || '');
-                    const labelMat = new THREE.MeshBasicMaterial({ map: labelTex });
                     const mats = [
                         new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }),
                         new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }),
                         new THREE.MeshStandardMaterial({ color: 0xc49a6c, roughness: 0.9 }),
                         new THREE.MeshStandardMaterial({ color: 0xc49a6c, roughness: 0.9 }),
-                        labelMat, // mặt trước
+                        new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }),
                         new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }),
                     ];
                     const boxMesh = new THREE.Mesh(boxGeo, mats);
@@ -829,14 +825,16 @@ const wireMat = new THREE.MeshBasicMaterial({ color: 0x333333 });
     const lowHeight = 2.8; 
     const highHeight = 3.0; 
  
+    // Kệ R1 và R2 (2 dãy nhỏ bên trái)
     for(let i = 0; i < 3; i++) {
         const currentZ = 3.4 + i * 4.3; 
         createDetailedRack(2.4, currentZ, rackWidth, 1.0, 4, lowHeight, 3, false); 
         createDetailedRack(6.4, currentZ, rackWidth, 1.0, 4, lowHeight, 3, false); 
     }
-    createSolidBox(0x9ca3af, 4.4, 7.7, 0.8, 12.6, 0.5);
-    createDetailedRack(7.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true, 'RA');
-    createDetailedRack(14.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, true, 'RB');
+
+    // Kệ R3 và R4 (2 dãy lớn bên phải - trả về đúng tọa độ X=7.5 và X=14.5, Z=7.7)
+    createDetailedRack(7.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, false, 'R3');
+    createDetailedRack(14.5, 7.7, rackWidth, 1.2, 12, highHeight, 3, false, 'R4');
  
     const lineMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
     const wingGeo = new THREE.BoxGeometry(1.0, 2.5, 0.1);
@@ -858,7 +856,17 @@ const wireMat = new THREE.MeshBasicMaterial({ color: 0x333333 });
     const shellMat = new THREE.MeshStandardMaterial({ 
         color: 0xe5e7eb, roughness: 0.2, transparent: true, opacity: 0.3, side: THREE.DoubleSide 
     });
- 
+ // --- TẠO MẶT SÀN KHO PRESET TRẮNG XÁM ---
+ const floorGeo = new THREE.PlaneGeometry(15.0, 30.0); // Kích thước vừa đúng 15x30 của kho preset
+ const floorMat = new THREE.MeshStandardMaterial({ 
+     color: 0xe5e7eb, // Màu trắng xám
+     roughness: 0.9 
+ });
+ const presetFloor = new THREE.Mesh(floorGeo, floorMat);
+ presetFloor.rotation.x = -Math.PI / 2;
+ // Đặt ở vị trí trung tâm của kho (X: 7.5, Y: 0, Z: 15.0)
+ presetFloor.position.set(7.5, 0.01, 15.0); 
+ presetGroup.add(presetFloor);
     const wallThick = 0.05;
     const wallHeight = 5.0;
     
@@ -1210,7 +1218,7 @@ document.getElementById('btn-add-sku').addEventListener('click', () => {
 document.getElementById('btn-save-sku').addEventListener('click', () => {
     const code     = document.getElementById('sku-code').value.trim();
     const name     = document.getElementById('sku-name').value.trim();
-const unit     = document.getElementById('sku-unit').value.trim();
+    const unit     = document.getElementById('sku-unit').value.trim();
     const stock    = parseInt(document.getElementById('sku-stock').value) || 0;
     const minStock = parseInt(document.getElementById('sku-min-stock').value) || 0;
     const price    = parseInt(document.getElementById('sku-price').value) || 0;
@@ -1220,6 +1228,17 @@ const unit     = document.getElementById('sku-unit').value.trim();
  
     const sku = { code, name, unit: unit || '—', stock, minStock, price, location: location || '—' };
     store.skus.push(sku);
+    
+    // YÊU CẦU 3: Lưu vào data 3D và tự động vẽ lên kệ
+    boxesData[code] = { 
+        name: name, 
+        sku: code, 
+        quantity: stock, 
+        location: location || '—', 
+        note: 'Thêm từ tab Quản lý hàng hóa' 
+    };
+    renderDynamicBox(sku);
+
     renderSkus();
     closeModal('modal-sku');
  
@@ -1236,10 +1255,11 @@ function renderSkus() {
     );
     if (filter === 'low-stock') rows = rows.filter(s => s.stock > 0 && s.stock <= s.minStock);
     if (filter === 'out-of-stock') rows = rows.filter(s => s.stock === 0);
- 
+
     const fmt = n => n.toLocaleString('vi-VN');
     tbody.innerHTML = rows.map(s => `
         <tr>
+            <td style="text-align:center;"><input type="checkbox" class="cb-picking" value="${s.code}" data-name="${s.name}" style="transform: scale(1.2); cursor:pointer;"></td>
             <td>${s.code}</td>
             <td>${s.name}</td>
             <td>${s.unit}</td>
@@ -1252,7 +1272,14 @@ function renderSkus() {
                 <button class="btn-row-action btn-row-delete" onclick="deleteItem('skus','${s.code}', renderSkus, 'code')">Xóa</button>
             </td>
         </tr>
-    `).join('') || '<tr><td colspan="9" style="text-align:center;color:#aaa;padding:24px">Chưa có hàng hóa nào</td></tr>';
+    `).join('') || '<tr><td colspan="10" style="text-align:center;color:#aaa;padding:24px">Chưa có hàng hóa nào</td></tr>';
+    
+    // Tự động chèn thêm Tiêu đề cột "Chọn" vào HTML nếu chưa có
+    const theadRow = tbody.parentElement.querySelector('thead tr');
+    if (theadRow && !theadRow.classList.contains('has-picking-col')) {
+        theadRow.insertAdjacentHTML('afterbegin', '<th style="width: 45px; text-align: center;">Chọn</th>');
+        theadRow.classList.add('has-picking-col');
+    }
 }
  
 document.getElementById('sku-search').addEventListener('input', renderSkus);
@@ -1365,14 +1392,17 @@ function openBoxPopup(boxId, clientX, clientY) {
     const popup = document.createElement('div');
     popup.id = 'box-popup';
     popup.style.cssText = `
-        position: fixed; z-index: 9999;
-        left: ${Math.min(clientX + 10, window.innerWidth - 340)}px;
-        top: ${Math.min(clientY + 10, window.innerHeight - 420)}px;
-        width: 320px; background: #fff;
-        border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.22);
-        padding: 20px 22px 16px; font-family: 'Segoe UI', sans-serif;
-        animation: popupIn .15s ease;
-    `;
+    position: fixed; z-index: 9999;
+    left: ${Math.min(clientX + 10, window.innerWidth - 320)}px;
+    top: ${Math.min(clientY + 10, window.innerHeight - 380)}px;
+    width: 280px; 
+    max-height: 350px; 
+    overflow-y: auto; 
+    background: #fff;
+    border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.22);
+    padding: 16px 18px; font-family: 'Segoe UI', sans-serif;
+    animation: popupIn .15s ease;
+`;
 
     const fmt = v => v || '<span style="color:#aaa">Chưa có</span>';
 
@@ -1511,109 +1541,241 @@ if (typeof io !== 'undefined') {
         boxes.forEach(b => { boxesData[b.boxId] = b; });
     });
 }
-// ══════════════════════════════════════════════
-// TÍNH NĂNG: TỐI ƯU LỘ TRÌNH PICKING
-// ══════════════════════════════════════════════
+// --- TÍNH NĂNG PICKING TÍCH HỢP TAB HÀNG HÓA ---
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. Chèn giao diện Modal Confirm vào hệ thống
+    document.body.insertAdjacentHTML('beforeend', `
+        <div id="modal-picking" class="modal-overlay">
+            <div class="modal-box" style="max-width: 480px;">
+                <button class="modal-close" onclick="closeModal('modal-picking')">✕</button>
+                <h3>🛒 Xác nhận danh sách Picking</h3>
+                <div class="form-group">
+                    <label>Mã Tag (Xe kéo/Nhân viên)</label>
+                    <input type="text" id="picking-tag-id" placeholder="VD: TAG-001" value="TAG-001">
+                    <small style="color:#6c757d;">(Hệ thống sẽ tạo một Tag giả ở khu vực cửa kho để test tính năng)</small>
+                </div>
+                <div class="form-group">
+                    <label>Danh sách hàng hóa cần lấy</label>
+                    <ul id="picking-confirm-list" style="list-style:none; padding:0; max-height: 220px; overflow-y:auto; border:1px solid #dee2e6; border-radius:5px; padding:10px; margin:0; background: #f8f9fa;">
+                    </ul>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn-secondary-outline" onclick="closeModal('modal-picking')">Hủy</button>
+                    <button class="btn-primary" id="btn-confirm-picking" style="background: #10b981;">Tạo lộ trình 3D</button>
+                </div>
+            </div>
+        </div>
+    `);
 
-const btnOpenPicking = document.getElementById('btn-open-picking');
-const pickingPanel = document.getElementById('picking-panel');
-const btnClosePicking = document.getElementById('btn-close-picking');
-const btnCalcRoute = document.getElementById('btn-calc-route');
+    // 2. Chèn nút "Lên lộ trình Picking" vào kế bên nút Thêm SKU
+    setTimeout(() => {
+        const btnAddSku = document.getElementById('btn-add-sku');
+        if (btnAddSku) {
+            btnAddSku.insertAdjacentHTML('beforebegin', `<button class="btn-primary" id="btn-start-picking" style="background-color: #10b981; margin-right: 10px;">🛒 Lên lộ trình Picking</button>`);
+            
+            // Xử lý sự kiện khi bấm nút Picking ở bảng
+            document.getElementById('btn-start-picking').addEventListener('click', () => {
+                const checkboxes = document.querySelectorAll('.cb-picking:checked');
+                window.selectedPickingItems = [];
+                const listEl = document.getElementById('picking-confirm-list');
+                listEl.innerHTML = '';
 
-// Mở Panel và tự động chuyển sang Tab 3D
-btnOpenPicking.addEventListener('click', (e) => {
-    e.preventDefault();
-    document.querySelector('[data-tab="tab-3d"]').click(); // Force switch to 3D tab
-    pickingPanel.style.display = 'flex';
-});
+                if (checkboxes.length === 0) return alert('Vui lòng tick chọn ít nhất 1 hàng hóa trong bảng để Picking!');
 
-// Đóng Panel và thoát chế độ Picking
-btnClosePicking.addEventListener('click', () => {
-    pickingPanel.style.display = 'none';
-    isPickingMode = false;
-    if (currentRouteLine) {
-        scene.remove(currentRouteLine);
-        currentRouteLine = null;
-    }
-});
+                checkboxes.forEach(cb => {
+                    window.selectedPickingItems.push(cb.value);
+                    listEl.innerHTML += `
+                        <li id="pick-item-${cb.value}" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid #eee; padding-bottom:8px;">
+                            <span><b>${cb.value}</b> - ${cb.dataset.name}</span>
+                            <button class="btn-row-action" onclick="removePickingItem('${cb.value}')" style="color:#dc2626; border-color:#fca5a5; padding:3px 8px;">Xóa</button>
+                        </li>
+                    `;
+                });
+                openModal('modal-picking');
+            });
+        }
+    }, 500);
 
-// Xử lý tìm đường và vẽ 3D
-btnCalcRoute.addEventListener('click', () => {
-    const inputVal = document.getElementById('picking-input').value;
-    if (!inputVal) return alert('Vui lòng nhập hàng hóa cần picking!');
+    // Hàm cho phép xóa hàng hóa ngay trong popup confirm
+    window.removePickingItem = function(code) {
+        document.getElementById('pick-item-' + code).remove();
+        window.selectedPickingItems = window.selectedPickingItems.filter(i => i !== code);
+        const cb = document.querySelector(`.cb-picking[value="${code}"]`);
+        if(cb) cb.checked = false; // Xóa tick ở bảng ngoài
+    };
 
-    const targets = inputVal.split(',').map(s => s.trim().toLowerCase());
-    
-    // Tọa độ cửa kho mặc định (Lấy theo setup loadMekongPreset của bạn)
-    const startPoint = new THREE.Vector3(7.5, 0.5, 29.95);
-    let pointsToVisit = [startPoint];
+    // 3. Xử lý thuật toán và Vẽ đường khi bấm Confirm
+    document.getElementById('btn-confirm-picking').addEventListener('click', () => {
+        if (window.selectedPickingItems.length === 0) return alert('Danh sách Picking đang trống!');
 
-    // YÊU CẦU 3: Đồng bộ dữ liệu với boxesData & boxMeshMap
-    targets.forEach(target => {
-        let foundBoxId = null;
-        
-        // 1. Tìm BoxId dựa trên đầu vào (so sánh ID hoặc SKU)
-        for (const [bId, bData] of Object.entries(boxesData)) {
-            if (bId.toLowerCase() === target || (bData.sku && bData.sku.toLowerCase() === target)) {
-                foundBoxId = bId;
-                break;
-            }
+        const tagId = document.getElementById('picking-tag-id').value.trim();
+        if (!tagId) return alert('Vui lòng nhập Tag ID!');
+
+        // --- TẠO TỌA ĐỘ GIẢ CHO TAG ĐỂ TEST ---
+        if (!tagDataStore[tagId]) {
+            // Đặt xe kéo giả ở tọa độ X=2.0 (gần tường trái), Y=28.0 (gần cửa cuốn)
+            tagDataStore[tagId] = { x: 2.0, y: 28.0, z: 0.5 }; 
+            updateTags3D(tagDataStore); // Render cục tròn đỏ (Tag) lên không gian 3D
         }
 
-        // 2. Lấy tọa độ 3D (Mesh) thực tế trong kho từ boxMeshMap
-        if (foundBoxId) {
-            const mappedObj = boxMeshMap.find(b => b.boxId === foundBoxId);
+        const tagPos = tagDataStore[tagId];
+        // Điểm xuất phát bắt đầu từ tọa độ của Tag
+        const startPoint = new THREE.Vector3(tagPos.x, tagPos.z || 0.5, tagPos.y); 
+
+        let pointsToVisit = [startPoint];
+
+        // Rút tọa độ 3D của các hàng hóa đã tick
+        window.selectedPickingItems.forEach(targetCode => {
+            const mappedObj = boxMeshMap.find(b => b.boxId === targetCode);
             if (mappedObj && mappedObj.mesh) {
                 const pos = new THREE.Vector3();
-                mappedObj.mesh.getWorldPosition(pos); // Lấy toạ độ tuyệt đối
+                mappedObj.mesh.getWorldPosition(pos);
                 pointsToVisit.push(pos);
             }
+        });
+
+        if (pointsToVisit.length <= 1) {
+            return alert("Không thể tính lộ trình! Vui lòng đảm bảo các hàng hóa đã chọn có Vị trí (VD: R1205) để hệ thống nhận diện trong 3D.");
         }
-    });
 
-    if (pointsToVisit.length <= 1) {
-        return alert("Không tìm thấy hàng hóa nào trong kho 3D khớp với dữ liệu (SKU/BoxID) bạn nhập.");
-    }
+        window.isPickingMode = true; // Bật cờ chặn click xem thông tin
 
-    // Bật chế độ chặn click popup
-    isPickingMode = true;
+        const SAFE_Z = 16.5; // Tọa độ Z của hành lang đi lại (Ngay trước mặt các kệ)
+        const END_POINT = new THREE.Vector3(7.5, 0.5, 29.0); // Điểm kết thúc / Bàn đóng gói ở gần cửa
 
-    // THUẬT TOÁN NEAREST NEIGHBOR (Giải bài toán TSP cơ bản cho 1/nhiều hàng)
-    let optimizedPath = [pointsToVisit[0]];
-    let unvisited = pointsToVisit.slice(1);
-    let currentPos = pointsToVisit[0];
+        // Hàm kiểm tra xem 2 điểm có bị vướng lưng kệ R2-R3 không
+        function needsToGoAround(p1, p2) {
+            // Nếu cả 2 điểm đều ở ngoài khu vực kệ (Z > 16.0) thì đi thoải mái không vướng
+            if (p1.z > 16.0 && p2.z > 16.0) return false;
+            
+            // Trái dãy (Kệ 1,2) là X < 7. Phải dãy (Kệ 3,4) là X > 7.
+            const isP1Left = p1.x < 7.0;
+            const isP2Left = p2.x < 7.0;
+            
+            // Nếu khác luồng kệ (1 bên trái, 1 bên phải) -> Bắt buộc đi vòng ra hành lang
+            return isP1Left !== isP2Left;
+        }
 
-    while(unvisited.length > 0) {
-        let nearestIdx = 0;
-        let minDist = currentPos.distanceTo(unvisited[0]);
-        for(let i = 1; i < unvisited.length; i++) {
-            let dist = currentPos.distanceTo(unvisited[i]);
-            if(dist < minDist) {
-                minDist = dist;
-                nearestIdx = i;
+        // Hàm tính khoảng cách thực tế thay vì đường chim bay
+        function getWalkingDist(p1, p2) {
+            if (!needsToGoAround(p1, p2)) {
+                return Math.abs(p1.z - p2.z) + Math.abs(p1.x - p2.x); 
+            }
+            return Math.abs(p1.z - SAFE_Z) + Math.abs(p1.x - p2.x) + Math.abs(p2.z - SAFE_Z);
+        }
+
+        // Thuật toán Nearest Neighbor tính quãng đường đi bộ tối ưu
+        let orderedVisits = [pointsToVisit[0]];
+        let unvisited = pointsToVisit.slice(1);
+        let currentPos = pointsToVisit[0];
+
+        while(unvisited.length > 0) {
+            let nearestIdx = 0;
+            let minDist = getWalkingDist(currentPos, unvisited[0]);
+            for(let i = 1; i < unvisited.length; i++) {
+                let dist = getWalkingDist(currentPos, unvisited[i]);
+                if(dist < minDist) { minDist = dist; nearestIdx = i; }
+            }
+            currentPos = unvisited[nearestIdx];
+            orderedVisits.push(currentPos);
+            unvisited.splice(nearestIdx, 1);
+        }
+        
+        // Thêm điểm kết thúc lộ trình (Điểm đóng gói)
+        orderedVisits.push(END_POINT);
+
+        // Tạo mảng tọa độ vẽ đường (Có các điểm neo bẻ góc vuông và bám sàn)
+        let curvePoints = [];
+        const floorY = 0.3; // Độ cao của dây so với mặt sàn (Sát mặt đất)
+
+        // Điểm xuất phát (Tag)
+        let startP = orderedVisits[0];
+        curvePoints.push(new THREE.Vector3(startP.x, startP.y, startP.z));
+        curvePoints.push(new THREE.Vector3(startP.x, floorY, startP.z)); // Dây rớt xuống sàn
+
+        for (let i = 1; i < orderedVisits.length; i++) {
+            let prevP = orderedVisits[i - 1];
+            let nextP = orderedVisits[i];
+
+            if (needsToGoAround(prevP, nextP)) {
+                // Đi vòng ra hành lang an toàn
+                curvePoints.push(new THREE.Vector3(prevP.x, floorY, SAFE_Z));
+                curvePoints.push(new THREE.Vector3(nextP.x, floorY, SAFE_Z));
+            } else {
+                // Đi bẻ góc vuông thẳng sang hàng/kệ đối diện
+                curvePoints.push(new THREE.Vector3(prevP.x, floorY, nextP.z));
+            }
+
+            // Đi tới ngay dưới chân điểm lấy hàng
+            curvePoints.push(new THREE.Vector3(nextP.x, floorY, nextP.z));
+            
+            // Chỉa đường kẻ thẳng lên tầng kệ chứa hàng
+            curvePoints.push(new THREE.Vector3(nextP.x, nextP.y, nextP.z));
+            
+            // Nếu chưa phải là điểm cuối thì kéo dây về lại mặt sàn để đi tiếp
+            if (i < orderedVisits.length - 1) {
+                curvePoints.push(new THREE.Vector3(nextP.x, floorY, nextP.z));
             }
         }
-        currentPos = unvisited[nearestIdx];
-        optimizedPath.push(currentPos);
-        unvisited.splice(nearestIdx, 1);
+
+        // Dọn đường cũ và Vẽ đường mới
+        if (typeof currentRouteLine !== 'undefined' && currentRouteLine) scene.remove(currentRouteLine);
+
+        const routeMaterial = new THREE.LineBasicMaterial({ color: 0x10b981, linewidth: 5 });
+        const routeGeometry = new THREE.BufferGeometry().setFromPoints(curvePoints);
+        window.currentRouteLine = new THREE.Line(routeGeometry, routeMaterial);
+        
+        scene.add(window.currentRouteLine);
+
+        // Đóng modal và chuyển sang Không gian 3D
+        closeModal('modal-picking');
+        document.querySelector('[data-tab="tab-3d"]').click();
+        
+        // Hiện pop-up chữ nhỏ báo thành công
+        showToast(`✅ Đã lập lộ trình Picking cho ${tagId}`);
+    });
+});
+function renderDynamicBox(sku) {
+    const match = sku.location.trim().toUpperCase().match(/^R([1-4])([1-3])(\d{2})$/);
+    if (!match) return;
+
+    const rackX_idx = parseInt(match[1]), tierY_idx = parseInt(match[2]), bayZ_idx = parseInt(match[3]);  
+    if (bayZ_idx < 1 || bayZ_idx > 12) return;
+
+    let X, Y, Z, boxGeo;
+    const j = bayZ_idx - 1; // index ô từ 0-11
+
+    if (rackX_idx === 1 || rackX_idx === 2) {
+        // Tọa độ cho kệ R1 và R2 (Bên trái)
+        X = rackX_idx === 1 ? 2.4 : 6.4;
+        const blockIndex = Math.floor(j / 4);
+        const localJ = j % 4;
+        Z = 1.9 + blockIndex * 4.3 + localJ * 1.0;
+        
+        const tierY = (2.8 * 0.15) + (tierY_idx - 1) * 0.98;
+        Y = tierY + 0.025 + (0.637 / 2);
+        boxGeo = new THREE.BoxGeometry(0.75, 0.637, 0.8);
+    } else {
+        // Tọa độ cho kệ R3 và R4 (Bên phải)
+        X = rackX_idx === 3 ? 7.5 : 14.5;
+        Z = 1.1 + j * 1.2;
+        
+        const tierY = (3.0 * 0.15) + (tierY_idx - 1) * 1.05;
+        Y = tierY + 0.025 + (0.6825 / 2);
+        boxGeo = new THREE.BoxGeometry(0.75, 0.6825, 0.96);
     }
 
-    // VẼ ĐƯỜNG ĐI TRONG THREE.JS
-    if (currentRouteLine) scene.remove(currentRouteLine);
-
-    const routeMaterial = new THREE.LineBasicMaterial({
-        color: 0x10b981, // Màu xanh lá nổi bật
-        linewidth: 4
-    });
-
-    // Gom các điểm lại và nâng lên 1 chút khỏi mặt đất để không bị lấp
-    const curvePoints = optimizedPath.map(p => new THREE.Vector3(p.x, p.y + 0.5, p.z));
-    const routeGeometry = new THREE.BufferGeometry().setFromPoints(curvePoints);
-    currentRouteLine = new THREE.Line(routeGeometry, routeMaterial);
+    const boxMat = new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 });
+    const boxMesh = new THREE.Mesh(boxGeo, boxMat);
+    boxMesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo), new THREE.LineBasicMaterial({ color: 0x5c4033 })));
     
-    scene.add(currentRouteLine);
+    boxMesh.position.set(X, Y, Z);
+    boxMesh.userData = { isBox: true, boxId: sku.code };
+
+    let dynamicGroup = scene.getObjectByName('dynamicBoxGroup') || new THREE.Group();
+    dynamicGroup.name = 'dynamicBoxGroup';
+    if (!scene.getObjectByName('dynamicBoxGroup')) scene.add(dynamicGroup);
     
-    // Tự động tắt Splash Screen và focus 3D nếu chưa tắt
-    document.getElementById('warehouse-splash').style.display = 'none';
-    document.getElementById('scene-container').style.display = 'block';
-});
+    dynamicGroup.add(boxMesh);
+    boxMeshMap.push({ mesh: boxMesh, boxId: sku.code });
+}
