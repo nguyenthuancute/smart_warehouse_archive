@@ -54,7 +54,43 @@ const axisHelper = new THREE.AxesHelper(1);
 axisScene.add(axisHelper);
  
 const canvas2d = document.getElementById('main-2d-canvas');
-const ctx2d = canvas2d.getContext('2d');
+const ctx2d = canvas2d ? canvas2d.getContext('2d') : null;
+// --- BIẾN ĐIỀU KHIỂN 2D ---
+let mapZoom = 1.0;
+let mapPan = { x: 50, y: 50 };
+let isMapDragging = false;
+let mapLastMouse = { x: 0, y: 0 };
+
+// Sự kiện Cuộn chuột để Zoom
+canvas2d.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const zoomSpeed = 0.1;
+    if (e.deltaY < 0) mapZoom *= (1 + zoomSpeed);
+    else mapZoom /= (1 + zoomSpeed);
+    mapZoom = Math.min(Math.max(0.5, mapZoom), 5); // Giới hạn mức zoom
+});
+
+// Sự kiện Nhấn chuột để di chuyển (Pan)
+canvas2d.addEventListener('mousedown', (e) => {
+    isMapDragging = true;
+    mapLastMouse = { x: e.clientX, y: e.clientY };
+});
+
+window.addEventListener('mousemove', (e) => {
+    if (!isMapDragging) return;
+    const dx = e.clientX - mapLastMouse.x;
+    const dy = e.clientY - mapLastMouse.y;
+    mapPan.x += dx;
+    mapPan.y += dy;
+    mapLastMouse = { x: e.clientX, y: e.clientY };
+});
+
+window.addEventListener('mouseup', () => { isMapDragging = false; });
+// Đặt kích thước cho canvas
+if (canvas2d) {
+    canvas2d.width = window.innerWidth - 260 || 800; 
+    canvas2d.height = window.innerHeight - 56 || 600;
+}
  
 let roomMesh = null;
 let anchorsData = [];
@@ -678,13 +714,127 @@ socket.on('tags_update', (data) => {
     }
 });
  
-// --- ANIMATION LOOP & RESIZE ---
+// --- ANIMATION LOOP & RESIZE ---\
+function render2D() {
+    const mapCont = document.getElementById('map-2d-container');
+    if (!ctx2d || !mapCont || mapCont.style.display === 'none') return;
+
+    const baseScale = 20; 
+    const currentScale = baseScale * mapZoom;
+
+    ctx2d.clearRect(0, 0, canvas2d.width, canvas2d.height);
+
+    // 1. Vẽ mặt sàn kho (Tỷ lệ chuẩn 15x30m)
+    ctx2d.fillStyle = '#f8f9fa';
+    ctx2d.fillRect(mapPan.x, mapPan.y, 15 * currentScale, 30 * currentScale);
+    ctx2d.strokeStyle = '#333';
+    ctx2d.lineWidth = 2;
+    ctx2d.strokeRect(mapPan.x, mapPan.y, 15 * currentScale, 30 * currentScale);
+
+    // 2. Hàm vẽ kệ chi tiết từng ô
+    const drawDetailedRack2D = (x, z, bays, bayLen, rackWidth, color, label) => {
+        const totalZ = bays * bayLen;
+        const startX = (x - rackWidth/2) * currentScale + mapPan.x;
+        const startZ = (z - totalZ/2) * currentScale + mapPan.y;
+        const w = rackWidth * currentScale;
+        const h = totalZ * currentScale;
+
+        // Vẽ khung kệ
+        ctx2d.fillStyle = color;
+        ctx2d.globalAlpha = 0.2;
+        ctx2d.fillRect(startX, startZ, w, h);
+        ctx2d.globalAlpha = 1.0;
+        ctx2d.strokeStyle = color;
+        ctx2d.lineWidth = 1;
+        ctx2d.strokeRect(startX, startZ, w, h);
+
+        // Vẽ các vạch chia ô hàng (Bays)
+        for(let i=1; i < bays; i++) {
+            const lineZ = startZ + (i * bayLen * currentScale);
+            ctx2d.beginPath();
+            ctx2d.moveTo(startX, lineZ);
+            ctx2d.lineTo(startX + w, lineZ);
+            ctx2d.stroke();
+        }
+
+        // Nhãn tên kệ
+        ctx2d.fillStyle = color;
+        ctx2d.font = `bold ${Math.max(9, 11 * mapZoom)}px sans-serif`;
+        ctx2d.textAlign = 'center';
+        ctx2d.fillText(label, startX + w/2, startZ - 5);
+    };
+
+    // Vẽ Kệ R1 (Trái) & R2 (Giữa trái) - Mỗi dãy 3 block
+    [3.4, 7.7, 12.0].forEach((z, idx) => {
+        drawDetailedRack2D(2.4, z, 4, 1.0, 1.0, '#3b82f6', `R1-${idx+1}`);
+        drawDetailedRack2D(6.4, z, 4, 1.0, 1.0, '#3b82f6', `R2-${idx+1}`);
+    });
+
+    // Vẽ Kệ R3 & R4 (Phải) - Dãy dài 12 ô
+    drawDetailedRack2D(7.5, 7.7, 12, 1.2, 1.0, '#1e40af', 'R3');
+    drawDetailedRack2D(14.5, 7.7, 12, 1.2, 1.0, '#1e40af', 'R4');
+
+    // 3. Vẽ hàng hóa (Khớp tọa độ 3D)
+    boxMeshMap.forEach(item => {
+        const pos = new THREE.Vector3(); 
+        item.mesh.getWorldPosition(pos);
+        ctx2d.fillStyle = '#d97706';
+        ctx2d.beginPath();
+        ctx2d.arc(pos.x * currentScale + mapPan.x, pos.z * currentScale + mapPan.y, 4 * mapZoom, 0, Math.PI * 2);
+        ctx2d.fill();
+    });
+
+// 4. Vẽ đường đi Picking và Hiệu ứng dòng chảy 2D
+if (window.currentRoutePoints && window.isPickingMode) {
+    // Rút gọn tọa độ, bỏ qua các bước lên/xuống kệ để 2D không bị vẽ đè tại chỗ
+    const flatPoints = [];
+    window.currentRoutePoints.forEach(p => {
+        const px = p.x * currentScale + mapPan.x;
+        const pz = p.z * currentScale + mapPan.y;
+        if (flatPoints.length === 0) {
+            flatPoints.push({x: px, z: pz});
+        } else {
+            const last = flatPoints[flatPoints.length - 1];
+            if (Math.hypot(last.x - px, last.z - pz) > 0.1) { 
+                flatPoints.push({x: px, z: pz});
+            }
+        }
+    });
+
+    // Vẽ lớp nền mờ bên dưới
+    ctx2d.strokeStyle = 'rgba(16, 185, 129, 0.25)';
+    ctx2d.lineWidth = 5;
+    ctx2d.beginPath();
+    flatPoints.forEach((p, i) => { if (i === 0) ctx2d.moveTo(p.x, p.z); else ctx2d.lineTo(p.x, p.z); });
+    ctx2d.stroke();
+
+    // Vẽ nét đứt chạy liên tục bên trên (tạo cảm giác mũi tên trượt đi)
+    ctx2d.strokeStyle = '#10b981';
+    ctx2d.lineWidth = 3;
+    ctx2d.setLineDash([12, 16]); // Độ dài nét đứt và khoảng trắng
+    ctx2d.lineDashOffset = -(Date.now() % 100000) / 30; // Chạy liên tục mượt mà
+    
+    ctx2d.beginPath();
+    flatPoints.forEach((p, i) => { if (i === 0) ctx2d.moveTo(p.x, p.z); else ctx2d.lineTo(p.x, p.z); });
+    ctx2d.stroke();
+    
+    ctx2d.setLineDash([]); // Reset để không làm hỏng các hình khác
+}
+}
 function animate() {
     requestAnimationFrame(animate);
     updateCameraMovement();
     updateObjectMovement();
     interpolateTagPositions();
     controls.update();
+    
+    // --- BỔ SUNG: Cập nhật 2D và hiệu ứng mũi tên ---
+    render2D(); 
+    if (window.routeTexture) {
+        window.routeTexture.offset.x -= 0.01;
+    }
+    // ----------------------------------------------
+
     renderer.render(scene, camera);
     axisCamera.quaternion.copy(camera.quaternion);
     axisRenderer.render(axisScene, axisCamera);
@@ -1666,33 +1816,23 @@ document.addEventListener('DOMContentLoaded', () => {
             return alert("Không thể tính lộ trình! Vui lòng đảm bảo các hàng hóa đã chọn có Vị trí (VD: R1205) để hệ thống nhận diện trong 3D.");
         }
 
-        window.isPickingMode = true; // Bật cờ chặn click xem thông tin
+        window.isPickingMode = true;
 
-        const SAFE_Z = 16.5; // Tọa độ Z của hành lang đi lại (Ngay trước mặt các kệ)
-        const END_POINT = new THREE.Vector3(7.5, 0.5, 29.0); // Điểm kết thúc / Bàn đóng gói ở gần cửa
+        const SAFE_Z = 16.5; 
+        const END_POINT = new THREE.Vector3(7.5, 0.5, 29.0);
 
-        // Hàm kiểm tra xem 2 điểm có bị vướng lưng kệ R2-R3 không
-        function needsToGoAround(p1, p2) {
-            // Nếu cả 2 điểm đều ở ngoài khu vực kệ (Z > 16.0) thì đi thoải mái không vướng
-            if (p1.z > 16.0 && p2.z > 16.0) return false;
-            
-            // Trái dãy (Kệ 1,2) là X < 7. Phải dãy (Kệ 3,4) là X > 7.
-            const isP1Left = p1.x < 7.0;
-            const isP2Left = p2.x < 7.0;
-            
-            // Nếu khác luồng kệ (1 bên trái, 1 bên phải) -> Bắt buộc đi vòng ra hành lang
-            return isP1Left !== isP2Left;
-        }
+        function getAisleX(x) { return x < 7.0 ? 4.4 : 11.0; }
 
-        // Hàm tính khoảng cách thực tế thay vì đường chim bay
         function getWalkingDist(p1, p2) {
-            if (!needsToGoAround(p1, p2)) {
-                return Math.abs(p1.z - p2.z) + Math.abs(p1.x - p2.x); 
-            }
-            return Math.abs(p1.z - SAFE_Z) + Math.abs(p1.x - p2.x) + Math.abs(p2.z - SAFE_Z);
+            let a1 = getAisleX(p1.x), a2 = getAisleX(p2.x);
+            if (p1.z >= SAFE_Z && p2.z >= SAFE_Z) return Math.abs(p1.x - p2.x) + Math.abs(p1.z - p2.z);
+            let dist = Math.abs(p1.x - a1);
+            if (a1 === a2) dist += Math.abs(p1.z - p2.z);
+            else dist += Math.abs(p1.z - SAFE_Z) + Math.abs(a1 - a2) + Math.abs(p2.z - SAFE_Z);
+            dist += Math.abs(p2.x - a2);
+            return dist;
         }
 
-        // Thuật toán Nearest Neighbor tính quãng đường đi bộ tối ưu
         let orderedVisits = [pointsToVisit[0]];
         let unvisited = pointsToVisit.slice(1);
         let currentPos = pointsToVisit[0];
@@ -1708,52 +1848,91 @@ document.addEventListener('DOMContentLoaded', () => {
             orderedVisits.push(currentPos);
             unvisited.splice(nearestIdx, 1);
         }
-        
-        // Thêm điểm kết thúc lộ trình (Điểm đóng gói)
         orderedVisits.push(END_POINT);
 
-        // Tạo mảng tọa độ vẽ đường (Có các điểm neo bẻ góc vuông và bám sàn)
         let curvePoints = [];
-        const floorY = 0.3; // Độ cao của dây so với mặt sàn (Sát mặt đất)
-
-        // Điểm xuất phát (Tag)
-        let startP = orderedVisits[0];
-        curvePoints.push(new THREE.Vector3(startP.x, startP.y, startP.z));
-        curvePoints.push(new THREE.Vector3(startP.x, floorY, startP.z)); // Dây rớt xuống sàn
+        const floorY = 0.15;
+        let cPos = new THREE.Vector3(orderedVisits[0].x, floorY, orderedVisits[0].z);
+        curvePoints.push(cPos.clone());
 
         for (let i = 1; i < orderedVisits.length; i++) {
-            let prevP = orderedVisits[i - 1];
-            let nextP = orderedVisits[i];
+            let pNext = orderedVisits[i];
+            
+            // TÁCH LÀN (Lanes): Thêm offset dựa trên số lượt để các đường song song nhau
+            // Tạo ra 5 làn đường cách nhau 0.18m (-0.36, -0.18, 0, +0.18, +0.36)
+            let laneOffsetX = ((i % 5) - 2) * 0.18; 
+            let laneOffsetZ = ((i % 5) - 2) * 0.18; 
+            
+            let origA1 = getAisleX(cPos.x);
+            let origA2 = getAisleX(pNext.x);
 
-            if (needsToGoAround(prevP, nextP)) {
-                // Đi vòng ra hành lang an toàn
-                curvePoints.push(new THREE.Vector3(prevP.x, floorY, SAFE_Z));
-                curvePoints.push(new THREE.Vector3(nextP.x, floorY, SAFE_Z));
+            let a1 = origA1 + laneOffsetX;
+            let a2 = origA2 + laneOffsetX;
+            let safeZ_curr = SAFE_Z + laneOffsetZ;
+
+            // 1. Bước ra hành lang (theo lane của lượt này)
+            if (Math.abs(cPos.x - a1) > 0.1) curvePoints.push(new THREE.Vector3(a1, floorY, cPos.z));
+
+            // 2. Di chuyển đến điểm tiếp theo
+            if (cPos.z >= SAFE_Z && pNext.z >= SAFE_Z) {
+                // Nếu đang ở khu vực bãi đáp an toàn
+                curvePoints.push(new THREE.Vector3(cPos.x, floorY, safeZ_curr));
+                curvePoints.push(new THREE.Vector3(pNext.x, floorY, safeZ_curr));
+            } else if (origA1 === origA2) {
+                // Đi dọc cùng một làn
+                curvePoints.push(new THREE.Vector3(a2, floorY, pNext.z));
             } else {
-                // Đi bẻ góc vuông thẳng sang hàng/kệ đối diện
-                curvePoints.push(new THREE.Vector3(prevP.x, floorY, nextP.z));
+                // Đổi luồng (phải đi vòng qua SAFE_Z)
+                curvePoints.push(new THREE.Vector3(a1, floorY, safeZ_curr));
+                curvePoints.push(new THREE.Vector3(a2, floorY, safeZ_curr));
+                curvePoints.push(new THREE.Vector3(a2, floorY, pNext.z));
             }
 
-            // Đi tới ngay dưới chân điểm lấy hàng
-            curvePoints.push(new THREE.Vector3(nextP.x, floorY, nextP.z));
+            // 3. Rẽ vào đúng điểm lấy hàng
+            curvePoints.push(new THREE.Vector3(pNext.x, floorY, pNext.z));
+            curvePoints.push(new THREE.Vector3(pNext.x, pNext.y, pNext.z)); 
             
-            // Chỉa đường kẻ thẳng lên tầng kệ chứa hàng
-            curvePoints.push(new THREE.Vector3(nextP.x, nextP.y, nextP.z));
-            
-            // Nếu chưa phải là điểm cuối thì kéo dây về lại mặt sàn để đi tiếp
             if (i < orderedVisits.length - 1) {
-                curvePoints.push(new THREE.Vector3(nextP.x, floorY, nextP.z));
+                curvePoints.push(new THREE.Vector3(pNext.x + 0.15, floorY, pNext.z));
+                cPos = new THREE.Vector3(pNext.x + 0.15, floorY, pNext.z);
             }
         }
+        // Lọc bỏ các điểm dính sát nhau để tránh xoắn ống 3D
+        let finalCurve = [curvePoints[0]];
+        for(let i = 1; i < curvePoints.length; i++) {
+            if(curvePoints[i].distanceTo(finalCurve[finalCurve.length-1]) > 0.05) {
+                finalCurve.push(curvePoints[i]);
+            }
+        }
+        window.currentRoutePoints = finalCurve;
 
-        // Dọn đường cũ và Vẽ đường mới
-        if (typeof currentRouteLine !== 'undefined' && currentRouteLine) scene.remove(currentRouteLine);
-
-        const routeMaterial = new THREE.LineBasicMaterial({ color: 0x10b981, linewidth: 5 });
-        const routeGeometry = new THREE.BufferGeometry().setFromPoints(curvePoints);
-        window.currentRouteLine = new THREE.Line(routeGeometry, routeMaterial);
+        // Vẽ lại Texture Mũi tên chuẩn tỷ lệ (hình > sắc nét)
+        const arrowCanvas = document.createElement('canvas');
+        arrowCanvas.width = 128; arrowCanvas.height = 64;
+        const aCtx = arrowCanvas.getContext('2d');
+        aCtx.fillStyle = '#10b981';
+        aCtx.beginPath(); aCtx.moveTo(20, 16); aCtx.lineTo(80, 32); aCtx.lineTo(20, 48); aCtx.lineTo(36, 32); aCtx.fill();
         
+        const arrowTex = new THREE.CanvasTexture(arrowCanvas);
+        arrowTex.wrapS = THREE.RepeatWrapping;
+        arrowTex.wrapT = THREE.RepeatWrapping;
+
+        const pathCurve = new THREE.CatmullRomCurve3(finalCurve, false, 'catmullrom', 0);
+        const pathLength = pathCurve.getLength();
+        
+        // Tự động tính lặp mũi tên dựa trên chiều dài đường (khoảng 1.2 mũi tên / mét)
+        arrowTex.repeat.set(Math.floor(pathLength * 1.2), 1); 
+
+        const routeMat = new THREE.MeshBasicMaterial({ map: arrowTex, transparent: true, side: THREE.DoubleSide });
+        const routeGeo = new THREE.TubeGeometry(pathCurve, Math.floor(pathLength * 8), 0.1, 6, false);
+        
+        if (window.currentRouteLine) scene.remove(window.currentRouteLine);
+        window.currentRouteLine = new THREE.Mesh(routeGeo, routeMat);
         scene.add(window.currentRouteLine);
+
+        window.routeTexture = arrowTex;
+
+        window.routeTexture = arrowTex;
 
         // Đóng modal và chuyển sang Không gian 3D
         closeModal('modal-picking');
