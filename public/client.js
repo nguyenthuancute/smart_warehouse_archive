@@ -1547,8 +1547,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.insertAdjacentHTML('beforeend', `
         <div id="modal-picking" class="modal-overlay">
             <div class="modal-box" style="max-width: 480px;">
-                <button class="modal-close" onclick="closeModal('modal-picking')">✕</button>
-                <h3>🛒 Xác nhận danh sách Picking</h3>
+                <button class="modal-close" onclick="document.getElementById('modal-picking').classList.remove('open')">✕</button>
+                <h3> Xác nhận danh sách Picking</h3>
                 <div class="form-group">
                     <label>Mã Tag (Xe kéo/Nhân viên)</label>
                     <input type="text" id="picking-tag-id" placeholder="VD: TAG-001" value="TAG-001">
@@ -1560,7 +1560,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </ul>
                 </div>
                 <div class="modal-actions">
-                    <button class="btn-secondary-outline" onclick="closeModal('modal-picking')">Hủy</button>
+                    <button class="btn-secondary-outline" onclick="document.getElementById('modal-picking').classList.remove('open')">Hủy</button>
                     <button class="btn-primary" id="btn-confirm-picking" style="background: #10b981;">Tạo lộ trình 3D</button>
                 </div>
             </div>
