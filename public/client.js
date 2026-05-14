@@ -1779,3 +1779,390 @@ function renderDynamicBox(sku) {
     dynamicGroup.add(boxMesh);
     boxMeshMap.push({ mesh: boxMesh, boxId: sku.code });
 }
+// ══════════════════════════════════════════════
+// PICKING ROUTE TAB — A* + TSP
+// ══════════════════════════════════════════════
+
+const PK = {
+    COLS: 32, ROWS: 62, CELL: 0.5,
+    // Entry = cổng vào phía trước giữa kho
+    ENTRY: { col: 15, row: 59, label: 'Cổng vào' }
+};
+
+// Xây grid chướng ngại vật dựa theo loadMekongPreset
+function buildPickingGrid() {
+    const g = Array.from({ length: PK.ROWS }, () => new Array(PK.COLS).fill(0));
+    // Tường biên
+    for (let r = 0; r < PK.ROWS; r++) { g[r][0] = 1; g[r][PK.COLS-1] = 1; }
+    for (let c = 0; c < PK.COLS; c++) { g[0][c] = 1; g[PK.ROWS-1][c] = 1; }
+    // Kệ R1 (x≈2.4): col 4-5, rows 3–24 (từng block 3.4+i*4.3)
+    [[3,10],[12,19],[21,28]].forEach(([rs,re]) => {
+        for (let r = rs; r <= re; r++) { g[r][4] = 1; g[r][5] = 1; }
+    });
+    // Kệ R2 (x≈6.4): col 12-13
+    [[3,10],[12,19],[21,28]].forEach(([rs,re]) => {
+        for (let r = rs; r <= re; r++) { g[r][12] = 1; g[r][13] = 1; }
+    });
+    // Kệ R3/RA (x=7.5): col 14-16, rows 15–44
+    for (let r = 15; r <= 44; r++) { g[r][14] = 1; g[r][15] = 1; g[r][16] = 1; }
+    // Kệ R4/RB (x=14.5): col 28-30
+    for (let r = 15; r <= 44; r++) { g[r][28] = 1; g[r][29] = 1; g[r][30] = 1; }
+    return g;
+}
+const pickingGrid = buildPickingGrid();
+
+// A* Pathfinding
+function astarPK(grid, start, end) {
+    const R = grid.length, C = grid[0].length;
+    const key = (r,c) => r * C + c;
+    const h = (r,c) => Math.abs(r-end.row)*1.001 + Math.abs(c-end.col)*1.001;
+    const DIRS = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+
+    const open = new Map();
+    const gS = {}, fS = {}, from = {};
+    const sk = key(start.row, start.col);
+    gS[sk] = 0; fS[sk] = h(start.row, start.col);
+    open.set(sk, start);
+
+    while (open.size > 0) {
+        let cur = null, ck = null, mf = Infinity;
+        for (const [k,n] of open) { const f = fS[k] ?? Infinity; if (f < mf) { mf = f; cur = n; ck = k; } }
+        open.delete(ck);
+        if (cur.row === end.row && cur.col === end.col) {
+            const path = [];
+            let k = ck;
+            while (from[k] !== undefined) {
+                path.unshift({ row: Math.floor(k/C), col: k%C });
+                k = from[k];
+            }
+            path.unshift(start);
+            return path;
+        }
+        for (const [dr,dc] of DIRS) {
+            const nr = cur.row+dr, nc = cur.col+dc;
+            if (nr<0||nr>=R||nc<0||nc>=C||grid[nr][nc]===1) continue;
+            if (dr!==0&&dc!==0&&(grid[cur.row+dr][cur.col]===1||grid[cur.row][cur.col+dc]===1)) continue;
+            const tg = (gS[ck]??Infinity) + (dr!==0&&dc!==0?1.414:1);
+            const nk = key(nr,nc);
+            if (tg < (gS[nk]??Infinity)) {
+                from[nk] = ck; gS[nk] = tg; fS[nk] = tg + h(nr,nc);
+                open.set(nk, { row:nr, col:nc });
+            }
+        }
+    }
+    return null;
+}
+
+// TSP Nearest Neighbor
+function tspNN(pts, startIdx) {
+    const n = pts.length, vis = new Array(n).fill(false), tour = [startIdx];
+    vis[startIdx] = true;
+    for (let s = 1; s < n; s++) {
+        const cur = tour[tour.length-1];
+        let best = -1, bd = Infinity;
+        for (let i = 0; i < n; i++) {
+            if (vis[i]) continue;
+            const dr = pts[i].row - pts[cur].row, dc = pts[i].col - pts[cur].col;
+            const d = Math.sqrt(dr*dr+dc*dc);
+            if (d < bd) { bd = d; best = i; }
+        }
+        if (best === -1) break;
+        tour.push(best); vis[best] = true;
+    }
+    return tour;
+}
+
+// Lấy grid pos của box
+function getPickGridPos(boxId) {
+    let match = boxId.match(/^(RA|RB)-B(\d+)T(\d+)$/);
+    if (match) {
+        const rack = match[1], bay = parseInt(match[2]);
+        const baseZ = 7.7 + (bay-1)*1.2 + 0.6;
+        const baseX = rack==='RA' ? 7.5 : 14.5;
+        const col = Math.round(baseX/PK.CELL);
+        const row = Math.round(baseZ/PK.CELL);
+        const pickCol = rack==='RA' ? col-3 : col+3;
+        return { col: Math.max(1,Math.min(PK.COLS-2,pickCol)), row: Math.max(1,Math.min(PK.ROWS-2,row)), label: boxId };
+    }
+    // SKU với location dạng R3xx
+    match = boxId.match(/^R([1-4])([1-3])(\d{2})$/);
+    if (match) {
+        const ri = parseInt(match[1]), bay = parseInt(match[3]);
+        let baseX, baseZ;
+        if (ri===1) { baseX=2.4; baseZ=1.9+Math.floor((bay-1)/4)*4.3+(bay-1)%4*1.0; }
+        else if (ri===2) { baseX=6.4; baseZ=1.9+Math.floor((bay-1)/4)*4.3+(bay-1)%4*1.0; }
+        else if (ri===3) { baseX=7.5; baseZ=1.1+(bay-1)*1.2; }
+        else { baseX=14.5; baseZ=1.1+(bay-1)*1.2; }
+        const col = Math.round(baseX/PK.CELL);
+        const row = Math.round(baseZ/PK.CELL);
+        const pickCol = (ri===1||ri===2) ? col+2 : (ri===3 ? col-2 : col+2);
+        return { col: Math.max(1,Math.min(PK.COLS-2,pickCol)), row: Math.max(1,Math.min(PK.ROWS-2,row)), label: boxId };
+    }
+    return null;
+}
+
+// ─── STATE ───
+let pickSel = new Set();
+let pickInitDone = false;
+
+function initPickingTab() {
+    if (!pickInitDone) {
+        document.getElementById('picking-search')?.addEventListener('input', renderPickList);
+        document.getElementById('btn-run-picking')?.addEventListener('click', runPicking);
+        pickInitDone = true;
+    }
+    renderPickList();
+    drawPickMap();
+}
+
+// Tổng hợp tất cả box có thể pick: từ boxMeshMap + store.skus có location
+function getAllPickableItems() {
+    const items = [];
+    const seen = new Set();
+
+    // Box từ kệ preset (RA/RB)
+    for (let bay=1; bay<=12; bay++) {
+        for (let tier=1; tier<=3; tier++) {
+            ['RA','RB'].forEach(rack => {
+                const id = `${rack}-B${bay}T${tier}`;
+                if (!seen.has(id)) {
+                    seen.add(id);
+                    const info = boxesData[id] || {};
+                    items.push({ id, name: info.name||'', sku: info.sku||'', qty: info.quantity||0 });
+                }
+            });
+        }
+    }
+
+    // SKU từ store có location
+    (store.skus||[]).forEach(s => {
+        if (s.location && s.location.match(/^R[1-4][1-3]\d{2}$/) && !seen.has(s.code)) {
+            seen.add(s.code);
+            items.push({ id: s.code, name: s.name||'', sku: s.code, qty: s.stock||0 });
+        }
+    });
+
+    return items;
+}
+
+function renderPickList() {
+    const search = (document.getElementById('picking-search')?.value||'').toLowerCase();
+    const items = getAllPickableItems().filter(i =>
+        i.id.toLowerCase().includes(search) || i.name.toLowerCase().includes(search) || i.sku.toLowerCase().includes(search)
+    );
+    const el = document.getElementById('picking-box-list');
+    if (!el) return;
+    el.innerHTML = items.length ? items.map(i => `
+        <div class="pick-item ${pickSel.has(i.id)?'selected':''}" onclick="togglePick('${i.id}')">
+            <input type="checkbox" ${pickSel.has(i.id)?'checked':''} onclick="event.stopPropagation();togglePick('${i.id}')">
+            <span class="pick-badge">${i.id}</span>
+            <span style="flex:1;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${i.name||'<span style="color:#aaa">Chưa đặt tên</span>'}</span>
+            <span style="color:#6b7280;font-size:.73em;">SL:${i.qty}</span>
+        </div>`).join('')
+    : '<div style="color:#aaa;font-size:.82em;padding:8px;">Không tìm thấy hàng hóa</div>';
+    renderPickSelected();
+}
+
+window.togglePick = function(id) {
+    pickSel.has(id) ? pickSel.delete(id) : pickSel.add(id);
+    renderPickList();
+};
+
+function renderPickSelected() {
+    const el = document.getElementById('picking-selected-list');
+    const cnt = document.getElementById('picking-count');
+    if (!el) return;
+    cnt.textContent = pickSel.size;
+    el.innerHTML = [...pickSel].map(id => {
+        const info = boxesData[id] || (store.skus||[]).find(s=>s.code===id) || {};
+        const name = info.name || info.code || id;
+        return `<div class="pick-sel-item">
+            <span><b>${id}</b>${name&&name!==id?' — '+name:''}</span>
+            <button onclick="togglePick('${id}')" style="border:none;background:none;color:#dc2626;cursor:pointer;font-size:1em;padding:0 4px;">✕</button>
+        </div>`;
+    }).join('') || '<div style="color:#aaa;font-size:.8em;padding:4px;">Chưa chọn hàng nào</div>';
+}
+
+// Vẽ bản đồ kho lên canvas
+function drawPickMap(fullPath, allPts, tour) {
+    const canvas = document.getElementById('picking-canvas');
+    if (!canvas) return;
+    const par = canvas.parentElement;
+    const W = par.clientWidth || 600;
+    const H = Math.max(300, (par.clientHeight||500) - 120);
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    const sx = W/PK.COLS, sy = H/PK.ROWS;
+
+    // Nền
+    ctx.fillStyle = '#0d1117'; ctx.fillRect(0,0,W,H);
+
+    // Grid + obstacles
+    for (let r=0; r<PK.ROWS; r++) {
+        for (let c=0; c<PK.COLS; c++) {
+            if (pickingGrid[r][c]===1) {
+                ctx.fillStyle = '#334155';
+                ctx.fillRect(c*sx, r*sy, sx, sy);
+            }
+        }
+    }
+
+    // Nhãn kệ
+    ctx.fillStyle = 'rgba(255,102,0,0.7)';
+    ctx.font = `bold ${Math.max(7,sx*0.9)}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (let bay=1; bay<=12; bay++) {
+        const posA = getPickGridPos(`RA-B${bay}T1`);
+        const posB = getPickGridPos(`RB-B${bay}T1`);
+        if (posA) ctx.fillText(`A${bay}`, 14*sx, posA.row*sy);
+        if (posB) ctx.fillText(`B${bay}`, 30*sx, posB.row*sy);
+    }
+    ctx.fillStyle = '#94a3b8'; ctx.font = `bold ${Math.max(8,sx)}px sans-serif`;
+    ctx.fillText('Kệ RA', 14*sx, 13*sy);
+    ctx.fillText('Kệ RB', 30*sx, 13*sy);
+
+    // Vẽ lộ trình A*
+    if (fullPath && fullPath.length>1) {
+        ctx.strokeStyle = '#facc15'; ctx.lineWidth = 2;
+        ctx.setLineDash([4,2]); ctx.shadowColor = '#facc15'; ctx.shadowBlur = 5;
+        ctx.beginPath();
+        ctx.moveTo(fullPath[0].col*sx + sx/2, fullPath[0].row*sy + sy/2);
+        for (let i=1; i<fullPath.length; i++) ctx.lineTo(fullPath[i].col*sx+sx/2, fullPath[i].row*sy+sy/2);
+        ctx.stroke();
+        ctx.setLineDash([]); ctx.shadowBlur = 0;
+    }
+
+    // Entry point
+    const ex = PK.ENTRY.col*sx+sx/2, ey = PK.ENTRY.row*sy+sy/2, er = Math.max(6,sx*0.8);
+    ctx.fillStyle = '#10b981'; ctx.beginPath(); ctx.arc(ex,ey,er,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.font=`bold ${Math.max(7,er*0.8)}px sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('S',ex,ey);
+
+    // Điểm lấy hàng
+    if (allPts && tour) {
+        const COLORS = ['#3b82f6','#f59e0b','#ef4444','#8b5cf6','#ec4899','#06b6d4','#84cc16','#f97316'];
+        allPts.forEach((pt,idx) => {
+            if (idx===0) return; // bỏ entry, đã vẽ trên
+            const orderIdx = tour.indexOf(idx);
+            const color = COLORS[(idx-1)%COLORS.length];
+            const x = pt.col*sx+sx/2, y = pt.row*sy+sy/2, r = Math.max(6,sx*0.8);
+            ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+            ctx.fillStyle='#fff'; ctx.font=`bold ${Math.max(7,r*0.8)}px sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+            ctx.fillText(String(orderIdx),x,y);
+            ctx.fillStyle = color; ctx.font=`${Math.max(6,sx*0.6)}px monospace`; ctx.textAlign='center';
+            ctx.fillText(pt.label, x, y-r-3);
+        });
+    }
+}
+
+function runPicking() {
+    if (pickSel.size===0) { alert('Chọn ít nhất 1 thùng hàng!'); return; }
+
+    const targets = [];
+    for (const id of pickSel) {
+        const pos = getPickGridPos(id);
+        if (pos) targets.push({ ...pos, boxId: id });
+    }
+    if (targets.length===0) { alert('Không xác định được vị trí hàng hóa trong kho!'); return; }
+
+    const allPts = [PK.ENTRY, ...targets];
+
+    // TSP: sắp xếp thứ tự tối ưu
+    const tour = tspNN(allPts, 0);
+
+    // A*: tính đường đi theo thứ tự tour
+    const fullPath = [];
+    const segs = [];
+    for (let i=0; i<tour.length-1; i++) {
+        const from = allPts[tour[i]], to = allPts[tour[i+1]];
+        const seg = astarPK(pickingGrid, from, to);
+        if (seg) {
+            segs.push({ fromIdx: tour[i], toIdx: tour[i+1], path: seg, dist: seg.length });
+            fullPath.push(...(i===0 ? seg : seg.slice(1)));
+        }
+    }
+    // Đường về entry
+    const last = allPts[tour[tour.length-1]];
+    const retSeg = astarPK(pickingGrid, last, PK.ENTRY);
+    if (retSeg) {
+        segs.push({ fromIdx: tour[tour.length-1], toIdx: 0, path: retSeg, dist: retSeg.length });
+        fullPath.push(...retSeg.slice(1));
+    }
+
+    drawPickMap(fullPath, allPts, tour);
+    renderPickSteps(tour, allPts, segs);
+
+    // Đồng thời vẽ lên 3D
+    drawRoute3D(tour, allPts);
+}
+
+function drawRoute3D(tour, allPts) {
+    if (typeof scene === 'undefined') return;
+    if (window.currentRouteLine) scene.remove(window.currentRouteLine);
+    const pts3D = [];
+    const floorY = 0.3;
+    tour.forEach((ptIdx, i) => {
+        const pt = allPts[ptIdx];
+        const wx = pt.col * PK.CELL;
+        const wz = pt.row * PK.CELL;
+        if (i===0) pts3D.push(new THREE.Vector3(wx, floorY, wz));
+        pts3D.push(new THREE.Vector3(wx, floorY, wz));
+    });
+    // Về entry
+    pts3D.push(new THREE.Vector3(PK.ENTRY.col*PK.CELL, floorY, PK.ENTRY.row*PK.CELL));
+
+    const geo = new THREE.BufferGeometry().setFromPoints(pts3D);
+    const mat = new THREE.LineBasicMaterial({ color: 0x10b981, linewidth: 4 });
+    window.currentRouteLine = new THREE.Line(geo, mat);
+    scene.add(window.currentRouteLine);
+}
+
+function renderPickSteps(tour, allPts, segs) {
+    const el = document.getElementById('picking-steps');
+    const statsEl = document.getElementById('picking-stats');
+    if (!el) return;
+
+    let totalCells = segs.reduce((s,sg) => s + (sg.dist||0), 0);
+    const totalDist = (totalCells * PK.CELL).toFixed(1);
+    const estMin = Math.ceil(totalCells * PK.CELL / 1.2 / 60);
+
+    const steps = tour.map((ptIdx, i) => {
+        const pt = allPts[ptIdx];
+        const isEntry = ptIdx===0;
+        const info = isEntry ? null : (boxesData[pt.boxId] || (store.skus||[]).find(s=>s.code===pt.boxId) || {});
+        const segDist = segs[i] ? (segs[i].dist*PK.CELL).toFixed(1) : '?';
+        const cls = i===0?'step-entry':'';
+        return `<div class="picking-step">
+            <div class="step-num ${cls}">${i+1}</div>
+            <div>
+                <b>${isEntry?'🚪 Cổng vào — Điểm xuất phát':`📦 ${pt.boxId}`}</b><br>
+                ${!isEntry?`<span style="color:#6b7280;">${info.name||info.code||'Chưa đặt tên'} — SL: ${info.quantity||info.stock||0}</span>`:''}
+                ${i>0&&segs[i-1]?`<span style="color:#9ca3af;font-size:.73em;"> · ${(segs[i-1].dist*PK.CELL).toFixed(1)}m tới đây</span>`:''}
+            </div>
+        </div>`;
+    });
+    const lastSeg = segs[segs.length-1];
+    steps.push(`<div class="picking-step">
+        <div class="step-num step-last">${tour.length+1}</div>
+        <div><b>🚪 Quay về Cổng vào</b>${lastSeg?`<span style="color:#9ca3af;font-size:.73em;"> · ${(lastSeg.dist*PK.CELL).toFixed(1)}m</span>`:''}</div>
+    </div>`);
+
+    el.innerHTML = steps.join('');
+    statsEl.innerHTML = `
+        <span>📏 Tổng: <b>${totalDist}m</b></span>
+        <span>⏱ ~<b>${estMin} phút</b></span>
+        <span>📦 <b>${tour.length-1}</b> điểm</span>
+    `;
+    document.getElementById('picking-result').style.display = 'block';
+}
+
+// Hook vào switchTab để init picking khi mở tab
+const _origSwitchTab = typeof switchTab === 'function' ? switchTab : null;
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-tab="tab-picking"]').forEach(link => {
+        link.addEventListener('click', () => {
+            setTimeout(initPickingTab, 80);
+        });
+    });
+});
