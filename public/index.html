@@ -479,8 +479,37 @@
                 </div>
             </div>
             <div class="form-group">
-                <label>Vị trí kho</label>
-                <input type="text" id="sku-location" placeholder="Kệ A1 - Tầng 2">
+                <label>Vị trí kho <span style="color:#6b7280;font-size:.78em;">(chọn kệ → hàng hóa xuất hiện trong 3D)</span></label>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+                    <div>
+                        <label style="font-size:.75em;color:#6b7280;font-weight:500;">Dãy kệ</label>
+                        <select id="sku-loc-rack" style="width:100%;padding:7px 8px;border:1px solid #dee2e6;border-radius:5px;font-size:.85em;">
+                            <option value="">-- Chọn --</option>
+                            <option value="1">R1 – Kệ trái A</option>
+                            <option value="2">R2 – Kệ trái B</option>
+                            <option value="3">R3 – Kệ phải A (RA)</option>
+                            <option value="4">R4 – Kệ phải B (RB)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:.75em;color:#6b7280;font-weight:500;">Tầng (1-3)</label>
+                        <select id="sku-loc-tier" style="width:100%;padding:7px 8px;border:1px solid #dee2e6;border-radius:5px;font-size:.85em;">
+                            <option value="1">Tầng 1 (dưới)</option>
+                            <option value="2">Tầng 2 (giữa)</option>
+                            <option value="3">Tầng 3 (trên)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:.75em;color:#6b7280;font-weight:500;">Ô bay (01-12)</label>
+                        <select id="sku-loc-bay" style="width:100%;padding:7px 8px;border:1px solid #dee2e6;border-radius:5px;font-size:.85em;">
+                            ${Array.from({length:12},(_,i)=>`<option value="${String(i+1).padStart(2,'0')}">Bay ${String(i+1).padStart(2,'0')}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+                <div style="margin-top:6px;padding:6px 10px;background:#f0fdf4;border-radius:5px;font-size:.78em;color:#065f46;">
+                    📍 Mã vị trí: <b id="sku-loc-preview">Chưa chọn</b>
+                </div>
+                <input type="hidden" id="sku-location">
             </div>
             <div class="modal-actions">
                 <button class="btn-secondary-outline" data-modal="modal-sku">Hủy</button>
@@ -563,33 +592,33 @@
     <div id="tab-picking" class="tab-content" style="display:none; padding:20px;">
         <div class="mgmt-header">
             <div>
-                <h1>📍 Lộ trình Picking</h1>
+                <h1> Lộ trình Picking</h1>
                 <p style="color:#6c757d;font-size:.85em;margin:2px 0 0;">Tối ưu lộ trình lấy hàng — A* Pathfinding + TSP Nearest Neighbor</p>
             </div>
             <button class="btn-primary" id="btn-run-picking" style="background:#10b981;">▶ Tính lộ trình</button>
         </div>
         <div id="picking-layout">
             <div id="picking-left">
-                <div class="picking-section-title">📦 Chọn hàng cần lấy</div>
+                <div class="picking-section-title">Chọn hàng cần lấy</div>
                 <input type="text" id="picking-search" placeholder="Tìm mã SKU, tên hàng..." style="width:100%;padding:8px 11px;border:1px solid #dee2e6;border-radius:6px;margin-bottom:10px;box-sizing:border-box;font-size:.85em;">
                 <div id="picking-box-list"></div>
                 <div class="picking-section-title" style="margin-top:16px;">🛒 Đã chọn (<span id="picking-count">0</span>)</div>
                 <div id="picking-selected-list"></div>
                 <div style="margin-top:14px;padding:10px 12px;background:#f8f9fa;border-radius:8px;font-size:.8em;color:#374151;line-height:1.7;">
-                    <b>📍 Xuất phát:</b> Cổng vào (Entry)<br>
-                    <b>🧮 Thuật toán:</b> A* Pathfinding tránh kệ<br>
-                    <b>🔀 Tối ưu thứ tự:</b> TSP Nearest Neighbor<br>
-                    <b>🗺️ Lưới:</b> 30×60 ô (mỗi ô 0.5m)
+                    <b>Xuất phát:</b> Cổng vào (Entry)<br>
+                    <b>Thuật toán:</b> A* Pathfinding tránh kệ<br>
+                    <b>Tối ưu thứ tự:</b> TSP Nearest Neighbor<br>
+                    <b>Lưới:</b> 30×60 ô (mỗi ô 0.5m)
                 </div>
             </div>
             <div id="picking-right">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                    <div class="picking-section-title" style="margin:0;">🗺️ Bản đồ kho 2D</div>
-                    <div style="font-size:.75em;color:#6c757d;">🟢 Entry &nbsp;🟡 Lộ trình &nbsp;🔵 Điểm lấy hàng</div>
+                    <div class="picking-section-title" style="margin:0;"> Bản đồ kho 2D</div>
+                    <div style="font-size:.75em;color:#6c757d;"> Entry &nbsp; Lộ trình &nbsp; Điểm lấy hàng</div>
                 </div>
                 <canvas id="picking-canvas"></canvas>
                 <div id="picking-result" style="display:none;overflow-y:auto;max-height:260px;margin-top:12px;">
-                    <div class="picking-section-title">📋 Chi tiết lộ trình</div>
+                    <div class="picking-section-title"> Chi tiết lộ trình</div>
                     <div id="picking-steps"></div>
                     <div id="picking-stats"></div>
                 </div>
