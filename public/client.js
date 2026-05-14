@@ -1211,6 +1211,25 @@ function renderForklifts() {
 document.getElementById('forklift-search').addEventListener('input', renderForklifts);
  
 // ══ SKU ══
+// Cập nhật preview mã vị trí khi chọn dropdown
+document.addEventListener('change', (e) => {
+    if (['sku-loc-rack','sku-loc-tier','sku-loc-bay'].includes(e.target.id)) {
+        const rack = document.getElementById('sku-loc-rack').value;
+        const tier = document.getElementById('sku-loc-tier').value;
+        const bay  = document.getElementById('sku-loc-bay').value;
+        const preview = document.getElementById('sku-loc-preview');
+        const locInput = document.getElementById('sku-location');
+        if (rack && tier && bay) {
+            const code = `R${rack}${tier}${bay}`;
+            preview.textContent = code;
+            locInput.value = code;
+        } else {
+            preview.textContent = 'Chưa chọn đủ';
+            locInput.value = '';
+        }
+    }
+});
+
 document.getElementById('btn-add-sku').addEventListener('click', () => {
     openModal('modal-sku');
 });
@@ -1225,25 +1244,34 @@ document.getElementById('btn-save-sku').addEventListener('click', () => {
     const location = document.getElementById('sku-location').value.trim();
  
     if (!code || !name) { alert('Vui lòng nhập Mã SKU và Tên hàng hóa!'); return; }
+    if (!location) { alert('Vui lòng chọn vị trí kho (Dãy kệ + Tầng + Bay)!'); return; }
  
-    const sku = { code, name, unit: unit || '—', stock, minStock, price, location: location || '—' };
+    const sku = { code, name, unit: unit || '—', stock, minStock, price, location };
     store.skus.push(sku);
     
-    // YÊU CẦU 3: Lưu vào data 3D và tự động vẽ lên kệ
+    // Lưu vào boxesData để hệ thống picking nhận biết
     boxesData[code] = { 
-        name: name, 
-        sku: code, 
-        quantity: stock, 
-        location: location || '—', 
-        note: 'Thêm từ tab Quản lý hàng hóa' 
+        name, sku: code, quantity: stock,
+        location, note: 'Thêm từ tab Quản lý hàng hóa'
     };
+
+    // Vẽ lên 3D ngay lập tức
     renderDynamicBox(sku);
 
     renderSkus();
     closeModal('modal-sku');
  
-    ['sku-code','sku-name','sku-unit','sku-stock','sku-min-stock','sku-price','sku-location']
-        .forEach(id => document.getElementById(id).value = '');
+    // Reset form
+    ['sku-code','sku-name','sku-unit','sku-stock','sku-min-stock','sku-price','sku-location'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    ['sku-loc-rack','sku-loc-tier','sku-loc-bay'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = id === 'sku-loc-tier' ? '1' : (id === 'sku-loc-bay' ? '01' : '');
+    });
+    const preview = document.getElementById('sku-loc-preview');
+    if (preview) preview.textContent = 'Chưa chọn';
 });
  
 function renderSkus() {
@@ -1547,8 +1575,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.insertAdjacentHTML('beforeend', `
         <div id="modal-picking" class="modal-overlay">
             <div class="modal-box" style="max-width: 480px;">
-                <button class="modal-close" onclick="document.getElementById('modal-picking').classList.remove('open')">✕</button>
-                <h3> Xác nhận danh sách Picking</h3>
+                <button class="modal-close" onclick="closeModal('modal-picking')">✕</button>
+                <h3>🛒 Xác nhận danh sách Picking</h3>
                 <div class="form-group">
                     <label>Mã Tag (Xe kéo/Nhân viên)</label>
                     <input type="text" id="picking-tag-id" placeholder="VD: TAG-001" value="TAG-001">
@@ -1560,7 +1588,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </ul>
                 </div>
                 <div class="modal-actions">
-                    <button class="btn-secondary-outline" onclick="document.getElementById('modal-picking').classList.remove('open')">Hủy</button>
+                    <button class="btn-secondary-outline" onclick="closeModal('modal-picking')">Hủy</button>
                     <button class="btn-primary" id="btn-confirm-picking" style="background: #10b981;">Tạo lộ trình 3D</button>
                 </div>
             </div>
@@ -1736,48 +1764,84 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 function renderDynamicBox(sku) {
-    const match = sku.location.trim().toUpperCase().match(/^R([1-4])([1-3])(\d{2})$/);
-    if (!match) return;
+    const loc = (sku.location || '').trim().toUpperCase();
+    const match = loc.match(/^R([1-4])([1-3])(\d{2})$/);
+    if (!match) {
+        console.warn(`SKU ${sku.code}: location "${sku.location}" không đúng định dạng R[1-4][1-3][01-12]`);
+        return;
+    }
 
-    const rackX_idx = parseInt(match[1]), tierY_idx = parseInt(match[2]), bayZ_idx = parseInt(match[3]);  
-    if (bayZ_idx < 1 || bayZ_idx > 12) return;
+    const rackIdx = parseInt(match[1]);
+    const tierIdx = parseInt(match[2]);
+    const bayIdx  = parseInt(match[3]);
+    if (bayIdx < 1 || bayIdx > 12) return;
 
+    const j = bayIdx - 1;
     let X, Y, Z, boxGeo;
-    const j = bayZ_idx - 1; // index ô từ 0-11
 
-    if (rackX_idx === 1 || rackX_idx === 2) {
-        // Tọa độ cho kệ R1 và R2 (Bên trái)
-        X = rackX_idx === 1 ? 2.4 : 6.4;
+    if (rackIdx === 1 || rackIdx === 2) {
+        X = rackIdx === 1 ? 2.4 : 6.4;
         const blockIndex = Math.floor(j / 4);
         const localJ = j % 4;
         Z = 1.9 + blockIndex * 4.3 + localJ * 1.0;
-        
-        const tierY = (2.8 * 0.15) + (tierY_idx - 1) * 0.98;
+        const tierY = (2.8 * 0.15) + (tierIdx - 1) * 0.98;
         Y = tierY + 0.025 + (0.637 / 2);
         boxGeo = new THREE.BoxGeometry(0.75, 0.637, 0.8);
     } else {
-        // Tọa độ cho kệ R3 và R4 (Bên phải)
-        X = rackX_idx === 3 ? 7.5 : 14.5;
+        X = rackIdx === 3 ? 7.5 : 14.5;
         Z = 1.1 + j * 1.2;
-        
-        const tierY = (3.0 * 0.15) + (tierY_idx - 1) * 1.05;
+        const tierY = (3.0 * 0.15) + (tierIdx - 1) * 1.05;
         Y = tierY + 0.025 + (0.6825 / 2);
         boxGeo = new THREE.BoxGeometry(0.75, 0.6825, 0.96);
     }
 
-    const boxMat = new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 });
-    const boxMesh = new THREE.Mesh(boxGeo, boxMat);
-    boxMesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo), new THREE.LineBasicMaterial({ color: 0x5c4033 })));
-    
+    // Tạo texture label với tên SKU
+    const labelCanvas = document.createElement('canvas');
+    labelCanvas.width = 256; labelCanvas.height = 128;
+    const lctx = labelCanvas.getContext('2d');
+    lctx.fillStyle = '#d2a679'; lctx.fillRect(0,0,256,128);
+    lctx.strokeStyle = '#8b5e3c'; lctx.lineWidth = 5; lctx.strokeRect(3,3,250,122);
+    lctx.fillStyle = '#fff8f0'; lctx.fillRect(8,8,240,112);
+    lctx.fillStyle = '#1e3a5f'; lctx.font = 'bold 20px monospace'; lctx.textAlign = 'center';
+    lctx.fillText(sku.code, 128, 42);
+    lctx.fillStyle = '#374151'; lctx.font = '15px sans-serif';
+    const shortName = sku.name.length > 16 ? sku.name.slice(0,16)+'…' : sku.name;
+    lctx.fillText(shortName, 128, 72);
+    lctx.fillStyle = '#6b7280'; lctx.font = '12px monospace';
+    lctx.fillText(loc, 128, 100);
+    const tex = new THREE.CanvasTexture(labelCanvas);
+
+    const mats = [
+        new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }),
+        new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }),
+        new THREE.MeshStandardMaterial({ color: 0xc49a6c, roughness: 0.9 }),
+        new THREE.MeshStandardMaterial({ color: 0xc49a6c, roughness: 0.9 }),
+        new THREE.MeshBasicMaterial({ map: tex }), // mặt trước
+        new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }),
+    ];
+
+    const boxMesh = new THREE.Mesh(boxGeo, mats);
+    boxMesh.add(new THREE.LineSegments(
+        new THREE.EdgesGeometry(boxGeo),
+        new THREE.LineBasicMaterial({ color: 0x5c4033 })
+    ));
     boxMesh.position.set(X, Y, Z);
     boxMesh.userData = { isBox: true, boxId: sku.code };
 
-    let dynamicGroup = scene.getObjectByName('dynamicBoxGroup') || new THREE.Group();
-    dynamicGroup.name = 'dynamicBoxGroup';
-    if (!scene.getObjectByName('dynamicBoxGroup')) scene.add(dynamicGroup);
-    
-    dynamicGroup.add(boxMesh);
+    // Thêm vào dynamicBoxGroup
+    let dynGroup = scene.getObjectByName('dynamicBoxGroup');
+    if (!dynGroup) {
+        dynGroup = new THREE.Group();
+        dynGroup.name = 'dynamicBoxGroup';
+        scene.add(dynGroup);
+    }
+    dynGroup.add(boxMesh);
     boxMeshMap.push({ mesh: boxMesh, boxId: sku.code });
+
+    // Nếu đang ở tab 3D thì hiện thông báo
+    if (document.getElementById('tab-3d').classList.contains('active')) {
+        showToast(`📦 Đã thêm ${sku.code} vào kệ ${loc}`);
+    }
 }
 // ══════════════════════════════════════════════
 // PICKING ROUTE TAB — A* + TSP
@@ -2136,7 +2200,7 @@ function renderPickSteps(tour, allPts, segs) {
         return `<div class="picking-step">
             <div class="step-num ${cls}">${i+1}</div>
             <div>
-                <b>${isEntry?'🚪 Cổng vào — Điểm xuất phát':`📦 ${pt.boxId}`}</b><br>
+                <b>${isEntry?' Cổng vào — Điểm xuất phát':` ${pt.boxId}`}</b><br>
                 ${!isEntry?`<span style="color:#6b7280;">${info.name||info.code||'Chưa đặt tên'} — SL: ${info.quantity||info.stock||0}</span>`:''}
                 ${i>0&&segs[i-1]?`<span style="color:#9ca3af;font-size:.73em;"> · ${(segs[i-1].dist*PK.CELL).toFixed(1)}m tới đây</span>`:''}
             </div>
@@ -2145,14 +2209,14 @@ function renderPickSteps(tour, allPts, segs) {
     const lastSeg = segs[segs.length-1];
     steps.push(`<div class="picking-step">
         <div class="step-num step-last">${tour.length+1}</div>
-        <div><b>🚪 Quay về Cổng vào</b>${lastSeg?`<span style="color:#9ca3af;font-size:.73em;"> · ${(lastSeg.dist*PK.CELL).toFixed(1)}m</span>`:''}</div>
+        <div><b> Quay về Cổng vào</b>${lastSeg?`<span style="color:#9ca3af;font-size:.73em;"> · ${(lastSeg.dist*PK.CELL).toFixed(1)}m</span>`:''}</div>
     </div>`);
 
     el.innerHTML = steps.join('');
     statsEl.innerHTML = `
-        <span>📏 Tổng: <b>${totalDist}m</b></span>
-        <span>⏱ ~<b>${estMin} phút</b></span>
-        <span>📦 <b>${tour.length-1}</b> điểm</span>
+        <span>Tổng: <b>${totalDist}m</b></span>
+        <span>~<b>${estMin} phút</b></span>
+        <span> <b>${tour.length-1}</b> điểm</span>
     `;
     document.getElementById('picking-result').style.display = 'block';
 }
