@@ -584,14 +584,46 @@ justify-content: center;
     }
     #sidebar > div:last-child button { width: 100% !important; padding: 10px !important; }
 
-    /* --- KHÔNG GIAN KHO & DASHBOARD --- */
-    #main-content { width: 100% !important; height: 100vh !important; overflow-y: auto; padding: 0; }
+   /* --- KHÔNG GIAN KHO & DASHBOARD --- */
+    #app-container { display: flex; flex-direction: column !important; height: 100dvh !important; overflow: hidden; }
+    
+    #main-content { 
+        width: 100% !important; 
+        flex: 1; /* Bắt buộc chiếm toàn bộ phần diện tích còn lại */
+        overflow-y: auto; 
+        padding: 0; 
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Ép các trang (Tabs) giãn full màn hình */
+    .tab-content { flex: 1; min-height: 100%; display: none; flex-direction: column; }
+    .tab-content.active { display: flex !important; }
+
+    /* Kho 3D/2D chiếm toàn bộ diện tích không gian trống */
+    #tab-3d { padding: 0 !important; }
+    #scene-container-wrapper { 
+        flex: 1; 
+        position: relative; 
+        width: 100%; 
+        height: 100%; 
+    }
+    
+    /* Ép Canvas 3D và 2D bung hết cỡ */
+    #scene-container, #map-2d-container { 
+        position: absolute; top: 0; left: 0; right: 0; bottom: 0; 
+        width: 100% !important; height: 100% !important; 
+    }
+    #main-2d-canvas { width: 100% !important; height: 100% !important; }
+    
+    /* Căn chỉnh lại các trang Quản lý (Nhân viên, Xe nâng...) */
+    .mgmt-tab { padding: 70px 15px 20px !important; }
+    .table-wrapper { flex: 1; min-height: 50vh; }
     
     /* Căn chỉnh lại Dashboard tránh bị nút Menu che mất */
     #tab-dashboard { padding: 70px 15px 20px !important; }
     .dashboard-cards { display: flex; flex-direction: column; gap: 15px; }
     .card { width: 100%; box-sizing: border-box; margin: 0; }
-
     /* --- THANH CÔNG CỤ 3D (HEADER) --- */
     .main-header { 
         padding: 60px 10px 15px 10px !important; /* Đẩy xuống để không đè nút Menu */
