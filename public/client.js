@@ -2743,3 +2743,30 @@ if (btnZoomIn && btnZoomOut) {
         }
     });
 }
+// ==========================================
+// BỔ SUNG: XỬ LÝ THU GỌN TOOLBAR 3D
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    const toggleBtn = document.getElementById('btn-toggle-toolbar');
+    const mainHeader = document.querySelector('.main-header');
+
+    if (toggleBtn && mainHeader) {
+        toggleBtn.addEventListener('click', () => {
+            mainHeader.classList.toggle('collapsed');
+            
+            // Đổi icon mũi tên
+            if (mainHeader.classList.contains('collapsed')) {
+                toggleBtn.textContent = '▲';
+            } else {
+                toggleBtn.textContent = '▼';
+            }
+            
+            // Cập nhật lại khung nhìn 3D sau khi header thay đổi kích thước
+            setTimeout(() => {
+                if (typeof onWindowResize === 'function') {
+                    onWindowResize();
+                }
+            }, 300);
+        });
+    }
+});
