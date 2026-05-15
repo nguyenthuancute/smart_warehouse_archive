@@ -541,117 +541,61 @@ justify-content: center;
     border-radius: 8px; font-size: .82em; color: #065f46;
     display: flex; gap: 18px; flex-wrap: wrap;
 }
+/* Ẩn các nút điều khiển mobile khi ở trên máy tính */
+#mobile-menu-btn { display: none; }
+#zoom-controls { display: none; }
+
 /* =========================================================
-   BỔ SUNG: GIAO DIỆN HIỂN THỊ DÀNH CHO ĐIỆN THOẠI (MOBILE)
+   GIAO DIỆN MOBILE TỐI ƯU (CÓ THỂ THU GỌN VÀ ZOOM)
 ========================================================= */
 @media screen and (max-width: 768px) {
-    /* 1. Đổi bố cục tổng thể từ cột ngang sang hàng dọc */
-    #app-container {
-        flex-direction: column !important;
-        height: 100vh;
+    #app-container { flex-direction: column !important; height: 100vh; overflow: hidden; }
+
+    /* --- NÚT MENU --- */
+    #mobile-menu-btn {
+        display: block !important; position: fixed; top: 12px; left: 12px; z-index: 1000;
+        background: #374151; color: white; border: none; padding: 6px 12px; 
+        border-radius: 6px; font-size: 24px; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.5);
     }
 
-    /* 2. Ép Sidebar thành thanh menu ngang cuộn được trên cùng */
+    /* --- NÚT ZOOM (Bên phải dưới cùng) --- */
+    #zoom-controls {
+        display: flex !important; flex-direction: column; position: fixed; right: 15px; bottom: 90px; 
+        z-index: 1000; gap: 12px;
+    }
+    #zoom-controls button {
+        width: 45px; height: 45px; background: #374151; color: white; border: none; 
+        border-radius: 50%; font-size: 26px; font-weight: bold; cursor: pointer; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center;
+    }
+    #zoom-controls button:active { background: #10b981; }
+
+    /* --- THANH MENU BÊN TRÁI (Ẩn đi, vuốt ra) --- */
     #sidebar {
-        width: 100% !important;
-        height: auto !important;
-        flex: none;
-        border-right: none;
-        border-bottom: 1px solid #374151;
-        padding: 10px 5px;
+        position: fixed; top: 0; left: -280px; /* Ẩn ra ngoài viền trái */
+        width: 250px !important; height: 100vh !important;
+        flex-direction: column; z-index: 1001; transition: left 0.3s ease;
+        background: #111827; box-shadow: 5px 0 15px rgba(0,0,0,0.6);
     }
+    #sidebar.open { left: 0; } /* Class để trượt thanh menu ra ngoài */
 
-    .sidebar-header {
-        display: none; /* Ẩn logo để tiết kiệm không gian màn hình */
-    }
+    .sidebar-header { display: block; margin-top: 20px; text-align: center; }
+    .sidebar-menu { display: block; overflow-y: auto; white-space: normal; padding-top: 10px; }
+    .sidebar-menu li { display: block; margin-bottom: 5px; }
 
-    .sidebar-menu {
-        display: flex;
-        flex-direction: row;
-        overflow-x: auto; /* Cho phép dùng ngón tay vuốt ngang */
-        white-space: nowrap;
-        padding-bottom: 5px;
-        margin: 0;
-    }
+    /* --- KHÔNG GIAN KHO --- */
+    #main-content { width: 100% !important; height: 100vh !important; }
+    
+    /* Đẩy tiêu đề lệch sang phải một chút để không đè lên nút Menu */
+    .main-header { padding-left: 60px; padding-top: 10px; flex-wrap: wrap; height: auto; }
+    .header-right { flex-wrap: wrap; width: 100%; gap: 5px; margin-top: 10px; }
+    .header-right > * { flex: 1 1 auto; font-size: 0.85em !important; }
 
-    .sidebar-menu li {
-        display: inline-block;
-        margin-right: 5px;
+    /* Tối ưu Popup cài đặt & Route */
+    .floating-panel, #picking-panel {
+        width: 90% !important; max-width: 400px; left: 50% !important; 
+        transform: translateX(-50%) !important; right: auto !important; top: 70px !important; 
+        max-height: 75vh; overflow-y: auto;
     }
-
-    .sidebar-menu a {
-        padding: 8px 12px;
-        font-size: 0.9em;
-        border-radius: 6px;
-    }
-
-    /* Định dạng lại khung thông tin User (nếu có) trên Mobile */
-    #sidebar > div:last-child {
-        display: flex !important;
-        flex-direction: row !important;
-        justify-content: space-between;
-        align-items: center;
-        padding: 5px 10px;
-        margin-top: 5px;
-        border-top: none !important;
-    }
-
-    #sidebar > div:last-child button {
-        width: auto !important;
-        padding: 5px 15px !important;
-        margin-top: 0 !important;
-    }
-
-    /* 3. Mở rộng không gian hiển thị chính (Bản đồ kho) */
-    #main-content {
-        width: 100% !important;
-        height: 100% !important;
-    }
-
-    /* Gói gọn thanh công cụ tìm kiếm và nút chế độ 2D/3D */
-    .main-header {
-        flex-wrap: wrap;
-        height: auto;
-        padding: 10px;
-    }
-
-    .header-right {
-        flex-wrap: wrap;
-        justify-content: center;
-        width: 100%;
-        gap: 5px;
-    }
-
-    .header-right > * {
-        flex: 1 1 auto;
-        font-size: 0.85em !important;
-    }
-
-    #sku-search-3d {
-        width: 100%;
-        margin-bottom: 5px;
-    }
-
-    /* 4. Định dạng lại các Bảng Popup, Cài đặt nổi để không bị tràn viền */
-    .floating-panel, #floating-panel, #picking-panel {
-        width: 94% !important;
-        max-width: 400px;
-        left: 50% !important;
-        transform: translateX(-50%) !important;
-        right: auto !important;
-        top: 20px !important;
-    }
-
-    /* 5. Căn giữa và phóng to nút "Đi đến điểm tiếp theo" để dễ bấm */
-    #btn-next-route-step {
-        width: 90% !important;
-        font-size: 1.1em !important;
-        bottom: 20px !important;
-        padding: 12px !important;
-    }
-
-    /* 6. Cho phép các bảng quản lý (nhân viên, xe nâng) cuộn ngang */
-    .table-wrapper {
-        overflow-x: auto;
-    }
+    #btn-next-route-step { width: 90% !important; bottom: 20px !important; padding: 12px !important; }
 }
