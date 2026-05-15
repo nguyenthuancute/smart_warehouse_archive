@@ -1388,16 +1388,14 @@ document.getElementById('btn-save-sku').addEventListener('click', () => {
     const code     = document.getElementById('sku-code').value.trim();
     const name     = document.getElementById('sku-name').value.trim();
     const unit     = document.getElementById('sku-unit').value.trim();
-    const stock    = parseInt(document.getElementById('sku-stock').value) || 0;
-    const minStock = parseInt(document.getElementById('sku-min-stock').value) || 0;
+    const quantity = parseInt(document.getElementById('sku-qty').value) || 0;
     const price    = parseInt(document.getElementById('sku-price').value) || 0;
     const location = document.getElementById('sku-location').value.trim();
  
     if (!code || !name) { alert('Vui lòng nhập Mã SKU và Tên hàng hóa!'); return; }
     if (!location) { alert('Vui lòng chọn vị trí kho (Dãy kệ + Tầng + Bay)!'); return; }
  
-    const sku = { code, name, unit: unit || '—', stock, minStock, price, location };
-    store.skus.push(sku);
+    const sku = { code, name, unit: unit || '—', quantity, price, location };
     
     // Lưu vào boxesData để hệ thống picking nhận biết
     boxesData[code] = { 
@@ -1431,8 +1429,8 @@ function renderSkus() {
     let rows = store.skus.filter(s =>
         s.code.toLowerCase().includes(search) || s.name.toLowerCase().includes(search)
     );
-    if (filter === 'low-stock') rows = rows.filter(s => s.stock > 0 && s.stock <= s.minStock);
-    if (filter === 'out-of-stock') rows = rows.filter(s => s.stock === 0);
+    if (filter === 'low-stock') rows = rows.filter(s => s.quantity > 0 && s.quantity <= 10); // Mặc định cảnh báo nếu < 10
+    if (filter === 'out-of-stock') rows = rows.filter(s => s.quantity === 0);
 
     const fmt = n => n.toLocaleString('vi-VN');
     tbody.innerHTML = rows.map(s => `
@@ -1441,11 +1439,10 @@ function renderSkus() {
             <td>${s.code}</td>
             <td>${s.name}</td>
             <td>${s.unit}</td>
-            <td>${fmt(s.stock)}</td>
-            <td>${fmt(s.minStock)}</td>
-            <td>${s.location}</td>
-            <td>${fmt(s.price)}</td>
-            <td>${fmt(s.stock * s.price)}</td>
+            <td>${fmt(s.quantity)}</td>
+<td>${s.location}</td>
+<td>${fmt(s.price)}</td>
+<td>${fmt(s.quantity * s.price)}</td>
             <td>
                 <button class="btn-row-action btn-row-delete" onclick="deleteItem('skus','${s.code}', renderSkus, 'code')">Xóa</button>
             </td>
@@ -1732,6 +1729,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     <input type="text" id="picking-tag-id" placeholder="VD: TAG-001" value="TAG-001">
                     <small style="color:#6c757d;">(Hệ thống sẽ tạo một Tag giả ở khu vực cửa kho để test tính năng)</small>
                 </div>
+                <div class="form-group" style="margin-top: 10px;">
+    <label>Chế độ hiển thị lộ trình</label>
+    <select id="route-display-mode" style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #dee2e6;">
+        <option value="full">Hiển thị toàn bộ lộ trình</option>
+        <option value="step">Hiển thị từng chặng (đến từng hàng hóa)</option>
+    </select>
+</div>
                 <div class="form-group">
                     <label>Danh sách hàng hóa cần lấy</label>
                     <ul id="picking-confirm-list" style="list-style:none; padding:0; max-height: 220px; overflow-y:auto; border:1px solid #dee2e6; border-radius:5px; padding:10px; margin:0; background: #f8f9fa;">
@@ -1927,10 +1931,51 @@ document.addEventListener('DOMContentLoaded', () => {
         const routeGeo = new THREE.TubeGeometry(pathCurve, Math.floor(pathLength * 8), 0.1, 6, false);
         
         if (window.currentRouteLine) scene.remove(window.currentRouteLine);
-        window.currentRouteLine = new THREE.Mesh(routeGeo, routeMat);
-        scene.add(window.currentRouteLine);
-
+        const displayMode = document.getElementById('route-display-mode-3d').value;
+        const btnNextStep = document.getElementById('btn-next-route-step');
+        
+        // Lưu trữ dữ liệu để vẽ từng bước
+        window.fullRouteCurve = pathCurve;
+        window.fullRouteLength = pathLength;
+        window.currentStepFraction = displayMode === 'full' ? 1.0 : (1.0 / window.selectedPickingItems.length);
+        
+        function drawCurrentRouteSegment() {
+            if (window.currentRouteLine) scene.remove(window.currentRouteLine);
+            
+            // Rút trích đoạn đường dựa trên % tiến độ (currentStepFraction)
+            const segmentPoints = window.fullRouteCurve.getSpacedPoints(Math.floor(window.fullRouteLength * 8 * window.currentStepFraction));
+            if (segmentPoints.length < 2) return;
+            
+            const segmentCurve = new THREE.CatmullRomCurve3(segmentPoints, false);
+            const segmentLength = segmentCurve.getLength();
+            
+            arrowTex.repeat.set(Math.floor(segmentLength * 1.2), 1);
+            const segGeo = new THREE.TubeGeometry(segmentCurve, Math.floor(segmentLength * 8), 0.1, 6, false);
+            window.currentRouteLine = new THREE.Mesh(segGeo, routeMat);
+            scene.add(window.currentRouteLine);
+        }
+        
+        drawCurrentRouteSegment();
         window.routeTexture = arrowTex;
+        
+        if (displayMode === 'step') {
+            btnNextStep.style.display = 'block';
+            // Gỡ event cũ trước khi gán mới để tránh bị lặp
+            btnNextStep.replaceWith(btnNextStep.cloneNode(true));
+            document.getElementById('btn-next-route-step').addEventListener('click', function() {
+                const stepAmount = 1.0 / window.selectedPickingItems.length;
+                window.currentStepFraction += stepAmount;
+                
+                if (window.currentStepFraction >= 0.99) {
+                    window.currentStepFraction = 1.0;
+                    this.style.display = 'none';
+                    showToast("Đã hiển thị chặng đường cuối cùng!");
+                }
+                drawCurrentRouteSegment();
+            });
+        } else {
+            btnNextStep.style.display = 'none';
+        }
 
         window.routeTexture = arrowTex;
 
@@ -2430,20 +2475,23 @@ function spawnRandomBoxes() {
     const tiers = ['1','2','3'];
     const used  = new Set();
 
-    // Xóa các box demo cũ nếu có
+    // 1. Xóa sạch dữ liệu demo cũ trong mảng store và object dữ liệu
     store.skus = store.skus.filter(s => !s._demo);
+    Object.keys(boxesData).forEach(key => {
+        if (boxesData[key]._demo) delete boxesData[key];
+    });
+
+    // 2. Xóa các mesh demo trên 3D và đồng bộ lại boxMeshMap
     let dynGroup = scene.getObjectByName('dynamicBoxGroup');
     if (dynGroup) {
-        // Xóa chỉ các mesh demo
         const toRemove = [];
-        dynGroup.traverse(obj => { if (obj.userData._demo) toRemove.push(obj); });
+        dynGroup.children.forEach(obj => { if (obj.userData._demo) toRemove.push(obj); });
         toRemove.forEach(obj => dynGroup.remove(obj));
     }
-    boxMeshMap = boxMeshMap.filter(b => !b._demo);
+    boxMeshMap = boxMeshMap.filter(b => !b.mesh.userData._demo);
 
-    // Shuffle DEMO_ITEMS
     const items = [...DEMO_ITEMS].sort(() => Math.random() - 0.5);
-    const count = 6 + Math.floor(Math.random() * 5); // 6-10 thùng
+    const count = 6 + Math.floor(Math.random() * 5);
 
     for (let i = 0; i < Math.min(count, items.length); i++) {
         let loc;
@@ -2455,49 +2503,50 @@ function spawnRandomBoxes() {
             loc = `R${r}${t}${b}`;
             tries++;
         } while (used.has(loc) && tries < 50);
+        
         if (used.has(loc)) continue;
         used.add(loc);
 
         const item = items[i];
+        // Kiểm tra nếu SKU đã tồn tại trong kho thật thì bỏ qua để tránh lặp
+        if (store.skus.some(s => s.code === item.sku)) continue;
+
         const sku = {
             code:     item.sku,
             name:     item.name,
             unit:     'Thùng',
-            stock:    Math.floor(Math.random() * 50) + 5,
-            minStock: 3,
+            quantity: Math.floor(Math.random() * 50) + 5,
             price:    (Math.floor(Math.random() * 90) + 10) * 1000,
             location: loc,
-            _demo:    true
+            _demo:    true // Đánh dấu là hàng demo
         };
 
         store.skus.push(sku);
-        boxesData[sku.code] = {
-            name:     sku.name,
-            sku:      sku.code,
-            quantity: sku.stock,
-            location: loc,
-            note:     'Demo tự động',
-            _demo:    true
-        };
+        boxesData[sku.code] = { ...sku, note: 'Demo tự động' };
 
         renderDynamicBox(sku);
     }
 
-    // Vẽ lại bảng SKU nếu đang ở tab đó
     if (typeof renderSkus === 'function') renderSkus();
-
-    showToast(` Đã spawn ${used.size} thùng hàng ngẫu nhiên vào kho`);
+    showToast(`✅ Đã làm mới ${used.size} hàng hóa demo`);
 }
 
-// Thêm nút Spawn vào header tab 3D
+// Thêm nút Spawn vào header tab Quản lý hàng hóa (SKU)
 document.addEventListener('DOMContentLoaded', () => {
-    const header3d = document.querySelector('#tab-3d .main-header .header-right');
-    if (header3d) {
+    const headerSku = document.querySelector('#tab-sku .mgmt-header');
+    if (headerSku) {
         const btn = document.createElement('button');
         btn.id = 'btn-spawn-boxes';
-        btn.textContent = ' Spawn hàng ngẫu nhiên';
-        btn.style.cssText = 'padding:7px 14px;background:#10b981;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:.82em;font-weight:600;margin-right:8px;';
+        btn.textContent = '🎲 Spawn hàng ngẫu nhiên';
+        btn.style.cssText = 'padding:7px 14px;background:#10b981;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:.82em;font-weight:600; margin-right:10px;';
         btn.addEventListener('click', spawnRandomBoxes);
-        header3d.prepend(btn);
+        
+        // Chèn vào cạnh nút "Thêm SKU mới"
+        const btnAddSku = document.getElementById('btn-add-sku');
+        if (btnAddSku) {
+            btnAddSku.parentNode.insertBefore(btn, btnAddSku);
+        } else {
+            headerSku.appendChild(btn);
+        }
     }
 });

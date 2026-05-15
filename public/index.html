@@ -97,6 +97,10 @@
                     <div class="header-left">
                         </div>
                     <div class="header-right">
+                        <select id="route-display-mode-3d" style="padding: 6px 10px; background: #374151; color: #fff; border: none; border-radius: 6px; font-size: 0.82em; cursor: pointer; margin-right: 8px;">
+                            <option value="full">🛣️ Toàn bộ đường</option>
+                            <option value="step">📍 Từng chặng</option>
+                        </select>
                         <input type="text" id="sku-search-3d" placeholder="Tìm kiếm SKU...">
                         <button id="btn-settings">Cài đặt</button>
                         <div id="mode-switcher">
@@ -128,6 +132,8 @@
         <canvas id="main-2d-canvas"></canvas>
     </div>
     <div id="axis-container"></div>
+    <div id="axis-container"></div>
+<button id="btn-next-route-step" class="btn-primary" style="display:none; position:absolute; bottom:30px; left:50%; transform:translateX(-50%); z-index:100; font-size:1.1em; padding:12px 24px; background:#10b981; box-shadow: 0 4px 10px rgba(0,0,0,0.4);">➡️ Đi đến điểm tiếp theo</button>
 
                     <div id="floating-panel" style="display: none;">
                         <div class="panel-header">
@@ -277,8 +283,7 @@
                                 <th>Mã SKU</th>
                                 <th>Tên hàng hóa</th>
                                 <th>ĐVT</th>
-                                <th>Tồn kho</th>
-                                <th>Tồn tối thiểu</th>
+                                <th>Số lượng</th>
                                 <th>Vị trí kho</th>
                                 <th>Đơn giá</th>
                                 <th>Giá trị</th>
@@ -464,20 +469,11 @@
                     <input type="text" id="sku-unit" placeholder="Thùng / Cái / Kg">
                 </div>
                 <div class="form-group">
-                    <label>Tồn kho</label>
-                    <input type="number" id="sku-stock" placeholder="0" min="0">
+                    <label>Số lượng</label>
+                    <input type="number" id="sku-qty" placeholder="0" min="0">
                 </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Tồn tối thiểu</label>
-                    <input type="number" id="sku-min-stock" placeholder="0" min="0">
                 </div>
-                <div class="form-group">
-                    <label>Đơn giá (VNĐ)</label>
-                    <input type="number" id="sku-price" placeholder="0" min="0">
-                </div>
-            </div>
+                <div class="form-row">
             <div class="form-group">
                 <label>Vị trí kho <span style="color:#6b7280;font-size:.78em;">(chọn kệ → hàng hóa xuất hiện trong 3D)</span></label>
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">

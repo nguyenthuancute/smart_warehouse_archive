@@ -101,13 +101,6 @@
                 return;
             }
 
-            // Kiểm tra role có khớp với tab đã chọn không
-            if (data.role !== selectedRole) {
-                errEl.textContent = `Tài khoản này là "${data.role === 'admin' ? 'Quản lý kho' : 'Khách hàng'}", vui lòng chọn đúng tab!`;
-                errEl.style.display = 'block';
-                return;
-            }
-
             window.location.href = '/index.html';
         }
     </script>
