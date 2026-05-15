@@ -2676,3 +2676,70 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 });
+// ==========================================
+// BỔ SUNG: XỬ LÝ NÚT MENU & ZOOM CHO MOBILE
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    const menuBtn = document.getElementById('mobile-menu-btn');
+    const sidebar = document.getElementById('sidebar');
+
+    if (menuBtn && sidebar) {
+        // Bấm nút để đóng/mở thanh menu
+        menuBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('open');
+        });
+
+        // Tự động đóng menu khi chọn một mục bất kỳ trên Mobile
+        document.querySelectorAll('.sidebar-menu a').forEach(link => {
+            link.addEventListener('click', () => {
+                if (window.innerWidth <= 768) {
+                    sidebar.classList.remove('open');
+                }
+            });
+        });
+    }
+});
+
+// Xử lý Nút Zoom (+/-)
+const btnZoomIn = document.getElementById('btn-zoom-in');
+const btnZoomOut = document.getElementById('btn-zoom-out');
+
+if (btnZoomIn && btnZoomOut) {
+    btnZoomIn.addEventListener('click', () => {
+        const is2D = document.getElementById('btn-mode-2d').classList.contains('active');
+        if (is2D) {
+            // Zoom in 2D
+            if (typeof mapZoom !== 'undefined' && typeof render2D === 'function') {
+                mapZoom *= 1.3;
+                render2D();
+            }
+        } else {
+            // Zoom in 3D (Kéo Camera tiến gần lại mục tiêu 30%)
+            if (typeof camera !== 'undefined' && typeof controls !== 'undefined') {
+                const dist = camera.position.distanceTo(controls.target);
+                const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
+                camera.position.copy(controls.target).add(dir.multiplyScalar(dist * 0.7));
+                controls.update();
+            }
+        }
+    });
+
+    btnZoomOut.addEventListener('click', () => {
+        const is2D = document.getElementById('btn-mode-2d').classList.contains('active');
+        if (is2D) {
+            // Zoom out 2D
+            if (typeof mapZoom !== 'undefined' && typeof render2D === 'function') {
+                mapZoom /= 1.3;
+                render2D();
+            }
+        } else {
+            // Zoom out 3D (Đẩy Camera lùi ra xa 30%)
+            if (typeof camera !== 'undefined' && typeof controls !== 'undefined') {
+                const dist = camera.position.distanceTo(controls.target);
+                const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
+                camera.position.copy(controls.target).add(dir.multiplyScalar(dist * 1.3));
+                controls.update();
+            }
+        }
+    });
+}
