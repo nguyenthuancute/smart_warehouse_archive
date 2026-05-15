@@ -1812,7 +1812,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
         const btnAddSku = document.getElementById('btn-add-sku');
         if (btnAddSku) {
-            btnAddSku.insertAdjacentHTML('beforebegin', `<button class="btn-primary" id="btn-start-picking" style="background-color: #10b981; margin-right: 10px;">🛒 Lên lộ trình Picking</button>`);
+            btnAddSku.insertAdjacentHTML('beforebegin', `<button class="btn-primary" id="btn-start-picking" style="background-color: #10b981; margin-right: 10px;"> Lên lộ trình Picking</button>`);
             
             // Xử lý sự kiện khi bấm nút Picking ở bảng
             document.getElementById('btn-start-picking').addEventListener('click', () => {
@@ -2072,11 +2072,11 @@ window.routeTexture = routeTex;
             
             window.currentRouteLine = new THREE.Mesh(routeGeo, routeMat);
             
-// Ép phẳng đường ống theo trục Y (xuống còn 0.01) để nó dẹp xuống thành mặt phẳng
+            // Ép phẳng đường ống theo trục Y (xuống còn 0.01) để nó dẹp xuống thành mặt phẳng
             window.currentRouteLine.scale.set(1, 0.01, 1);
             
-            // Đặt cao hơn mặt sàn (Y=0.01) một chút xíu để không bị che khuất và dán chặt xuống sàn
-            window.currentRouteLine.position.y = 0.02; 
+            // Hạ thấp dải băng này xuống sát mép mặt sàn (để không bị lơ lửng)
+            window.currentRouteLine.position.y = 0.1; 
             
             scene.add(window.currentRouteLine);
         };
@@ -2663,7 +2663,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (headerSku) {
         const btn = document.createElement('button');
         btn.id = 'btn-spawn-boxes';
-        btn.textContent = '🎲 Spawn hàng ngẫu nhiên';
+        btn.textContent = ' Spawn hàng ngẫu nhiên';
         btn.style.cssText = 'padding:7px 14px;background:#10b981;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:.82em;font-weight:600; margin-right:10px;';
         btn.addEventListener('click', spawnRandomBoxes);
         
