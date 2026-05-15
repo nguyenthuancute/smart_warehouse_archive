@@ -2409,3 +2409,95 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 });
+// ══ SPAWN THÙNG HÀNG NGẪU NHIÊN ══
+const DEMO_ITEMS = [
+    { name: 'Hộp bu lông M8',      sku: 'SKU-BLM8'  },
+    { name: 'Ốc vít inox M6',      sku: 'SKU-OVM6'  },
+    { name: 'Dây cáp điện 2.5mm',  sku: 'SKU-CAP25' },
+    { name: 'Kẹp cáp nhựa',        sku: 'SKU-KCP'   },
+    { name: 'Băng keo cách điện',   sku: 'SKU-BKCD'  },
+    { name: 'Vòng đệm cao su',      sku: 'SKU-VDCS'  },
+    { name: 'Đầu nối RJ45',         sku: 'SKU-RJ45'  },
+    { name: 'Ống luồn dây',         sku: 'SKU-OLD'   },
+    { name: 'Cầu chì 10A',          sku: 'SKU-CC10'  },
+    { name: 'Relay 24VDC',          sku: 'SKU-R24'   },
+    { name: 'Contactor 16A',        sku: 'SKU-CON16' },
+    { name: 'Dây thít nhựa',        sku: 'SKU-DTN'   },
+];
+
+function spawnRandomBoxes() {
+    const racks = ['1','2','3','4'];
+    const tiers = ['1','2','3'];
+    const used  = new Set();
+
+    // Xóa các box demo cũ nếu có
+    store.skus = store.skus.filter(s => !s._demo);
+    let dynGroup = scene.getObjectByName('dynamicBoxGroup');
+    if (dynGroup) {
+        // Xóa chỉ các mesh demo
+        const toRemove = [];
+        dynGroup.traverse(obj => { if (obj.userData._demo) toRemove.push(obj); });
+        toRemove.forEach(obj => dynGroup.remove(obj));
+    }
+    boxMeshMap = boxMeshMap.filter(b => !b._demo);
+
+    // Shuffle DEMO_ITEMS
+    const items = [...DEMO_ITEMS].sort(() => Math.random() - 0.5);
+    const count = 6 + Math.floor(Math.random() * 5); // 6-10 thùng
+
+    for (let i = 0; i < Math.min(count, items.length); i++) {
+        let loc;
+        let tries = 0;
+        do {
+            const r = racks[Math.floor(Math.random() * racks.length)];
+            const t = tiers[Math.floor(Math.random() * tiers.length)];
+            const b = String(1 + Math.floor(Math.random() * 12)).padStart(2, '0');
+            loc = `R${r}${t}${b}`;
+            tries++;
+        } while (used.has(loc) && tries < 50);
+        if (used.has(loc)) continue;
+        used.add(loc);
+
+        const item = items[i];
+        const sku = {
+            code:     item.sku,
+            name:     item.name,
+            unit:     'Thùng',
+            stock:    Math.floor(Math.random() * 50) + 5,
+            minStock: 3,
+            price:    (Math.floor(Math.random() * 90) + 10) * 1000,
+            location: loc,
+            _demo:    true
+        };
+
+        store.skus.push(sku);
+        boxesData[sku.code] = {
+            name:     sku.name,
+            sku:      sku.code,
+            quantity: sku.stock,
+            location: loc,
+            note:     'Demo tự động',
+            _demo:    true
+        };
+
+        renderDynamicBox(sku);
+    }
+
+    // Vẽ lại bảng SKU nếu đang ở tab đó
+    if (typeof renderSkus === 'function') renderSkus();
+
+    showToast(` Đã spawn ${used.size} thùng hàng ngẫu nhiên vào kho`);
+}
+
+// Thêm nút Spawn vào header tab 3D
+document.addEventListener('DOMContentLoaded', () => {
+    const header3d = document.querySelector('#tab-3d .main-header .header-right');
+    if (header3d) {
+        const btn = document.createElement('button');
+        btn.id = 'btn-spawn-boxes';
+        btn.textContent = ' Spawn hàng ngẫu nhiên';
+        btn.style.cssText = 'padding:7px 14px;background:#10b981;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:.82em;font-weight:600;margin-right:8px;';
+        btn.addEventListener('click', spawnRandomBoxes);
+        header3d.prepend(btn);
+    }
+});
