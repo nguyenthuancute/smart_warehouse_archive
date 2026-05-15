@@ -657,3 +657,38 @@ justify-content: center;
     #zoom-controls { bottom: 20px; right: 10px; gap: 10px; }
     #zoom-controls button { width: 45px; height: 45px; font-size: 24px; background: rgba(55, 65, 81, 0.9); }
 }
+/* =========================================================
+   THU GỌN THANH CÔNG CỤ 3D (MOBILE)
+========================================================= */
+#btn-toggle-toolbar {
+    display: none; /* Mặc định ẩn trên máy tính */
+}
+
+@media screen and (max-width: 768px) {
+    #btn-toggle-toolbar {
+        display: flex !important; align-items: center; justify-content: center;
+        position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%);
+        background: #374151; color: white; border: none;
+        width: 45px; height: 22px; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px;
+        font-size: 12px; z-index: 100; cursor: pointer;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: background 0.2s;
+    }
+
+    #btn-toggle-toolbar:active { background: #10b981; }
+
+    .main-header { transition: all 0.3s ease; position: relative; }
+
+    /* Trạng thái khi thu gọn header */
+    .main-header.collapsed {
+        padding-top: 50px !important; /* Giữ lại khoảng trống cho nút ☰ */
+        padding-bottom: 5px !important; height: auto;
+    }
+
+    .main-header.collapsed .header-right {
+        display: none !important; /* Ẩn toàn bộ nút bấm bên trong */
+    }
+
+    .main-header.collapsed #btn-toggle-toolbar {
+        transform: translateX(-50%) rotate(180deg); /* Lật ngược mũi tên */
+    }
+}
