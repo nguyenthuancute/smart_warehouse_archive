@@ -774,21 +774,59 @@ function render2D() {
     drawDetailedRack2D(7.5, 7.7, 12, 1.2, 1.0, '#1e40af', 'R3');
     drawDetailedRack2D(14.5, 7.7, 12, 1.2, 1.0, '#1e40af', 'R4');
 
-    // 3. Vẽ hàng hóa (Khớp tọa độ 3D)
-    boxMeshMap.forEach(item => {
-        const pos = new THREE.Vector3(); 
-        item.mesh.getWorldPosition(pos);
-        ctx2d.fillStyle = '#d97706';
-        ctx2d.beginPath();
-        ctx2d.arc(pos.x * currentScale + mapPan.x, pos.z * currentScale + mapPan.y, 4 * mapZoom, 0, Math.PI * 2);
-        ctx2d.fill();
-    });
+// 3. Vẽ hàng hóa (Khớp tọa độ 3D) & Highlight mục tiêu đang tới
+const displayMode = document.getElementById('route-display-mode-3d') ? document.getElementById('route-display-mode-3d').value : 'full';
+    
+boxMeshMap.forEach(item => {
+    const pos = new THREE.Vector3(); 
+    item.mesh.getWorldPosition(pos);
+    
+    let isTarget = false;
+    // Đã sửa thành currentRouteStep + 1 để nhắm vào ĐÍCH ĐẾN của chặng
+    if (window.isPickingMode && displayMode === 'step' && window.routeStopIndices && window.routeStopIndices[window.currentRouteStep] !== undefined) {
+        if (window.orderedVisits && window.orderedVisits[window.currentRouteStep + 1] && window.orderedVisits[window.currentRouteStep + 1].boxId === item.boxId) {
+            isTarget = true;
+        }
+    }
+    
+    const px = pos.x * currentScale + mapPan.x;
+    const pz = pos.z * currentScale + mapPan.y;
 
-// 4. Vẽ đường đi Picking và Hiệu ứng dòng chảy 2D
+    // Nếu là mục tiêu thì vẽ hiệu ứng quầng sáng to và rõ hơn
+    if (isTarget) {
+        // Lớp sáng mờ bên ngoài
+        ctx2d.beginPath();
+        ctx2d.arc(px, pz, 14 * mapZoom, 0, Math.PI * 2);
+        ctx2d.fillStyle = 'rgba(16, 185, 129, 0.3)'; 
+        ctx2d.fill();
+        
+        // Lớp sáng đậm bên trong
+        ctx2d.beginPath();
+        ctx2d.arc(px, pz, 8 * mapZoom, 0, Math.PI * 2);
+        ctx2d.fillStyle = 'rgba(16, 185, 129, 0.6)';
+        ctx2d.fill();
+    }
+
+    ctx2d.fillStyle = isTarget ? '#4ade80' : '#d97706'; // Nổi bật điểm đích bằng màu xanh ngọc sáng
+    ctx2d.beginPath();
+    ctx2d.arc(px, pz, (isTarget ? 6 : 4) * mapZoom, 0, Math.PI * 2);
+    ctx2d.fill();
+});
+
+// 4. Vẽ đường đi Picking (Đồng bộ từng chặng)
 if (window.currentRoutePoints && window.isPickingMode) {
-    // Rút gọn tọa độ, bỏ qua các bước lên/xuống kệ để 2D không bị vẽ đè tại chỗ
+    let pointsToDraw = window.currentRoutePoints;
+    
+    if (displayMode === 'step' && window.routeStopIndices) {
+        let startIdx = window.currentRouteStep === 0 ? 0 : window.routeStopIndices[window.currentRouteStep - 1];
+        let endIdx = window.routeStopIndices[window.currentRouteStep];
+        if (endIdx !== undefined) {
+            pointsToDraw = window.currentRoutePoints.slice(startIdx, endIdx + 1);
+        }
+    }
+
     const flatPoints = [];
-    window.currentRoutePoints.forEach(p => {
+    pointsToDraw.forEach(p => {
         const px = p.x * currentScale + mapPan.x;
         const pz = p.z * currentScale + mapPan.y;
         if (flatPoints.length === 0) {
@@ -800,6 +838,27 @@ if (window.currentRoutePoints && window.isPickingMode) {
             }
         }
     });
+
+    if (flatPoints.length > 1) {
+        // Lớp nền mờ
+        ctx2d.strokeStyle = 'rgba(16, 185, 129, 0.25)';
+        ctx2d.lineWidth = 5;
+        ctx2d.beginPath();
+        flatPoints.forEach((p, i) => { if (i === 0) ctx2d.moveTo(p.x, p.z); else ctx2d.lineTo(p.x, p.z); });
+        ctx2d.stroke();
+
+        // Nét đứt chạy liên tục
+        ctx2d.strokeStyle = '#10b981';
+        ctx2d.lineWidth = 3;
+        ctx2d.setLineDash([12, 16]); 
+        ctx2d.lineDashOffset = -(Date.now() % 100000) / 30; 
+        
+        ctx2d.beginPath();
+        flatPoints.forEach((p, i) => { if (i === 0) ctx2d.moveTo(p.x, p.z); else ctx2d.lineTo(p.x, p.z); });
+        ctx2d.stroke();
+        ctx2d.setLineDash([]);
+    }
+}
 
     // Vẽ lớp nền mờ bên dưới
     ctx2d.strokeStyle = 'rgba(16, 185, 129, 0.25)';
@@ -820,7 +879,6 @@ if (window.currentRoutePoints && window.isPickingMode) {
     
     ctx2d.setLineDash([]); // Reset để không làm hỏng các hình khác
 }
-}
 function animate() {
     requestAnimationFrame(animate);
     updateCameraMovement();
@@ -828,11 +886,12 @@ function animate() {
     interpolateTagPositions();
     controls.update();
     
-    // --- BỔ SUNG: Cập nhật 2D và hiệu ứng mũi tên ---
-    render2D(); 
-    if (window.routeTexture) {
-        window.routeTexture.offset.x -= 0.01;
-    }
+// --- BỔ SUNG: Cập nhật 2D và hiệu ứng chuyển động ---
+render2D(); 
+if (window.routeTexture) {
+    // Trôi liên tục dựa trên thời gian thực, đồng bộ với 2D
+    window.routeTexture.offset.x = -(Date.now() % 100000) / 800; 
+}
     // ----------------------------------------------
 
     renderer.render(scene, camera);
@@ -1812,6 +1871,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (mappedObj && mappedObj.mesh) {
                 const pos = new THREE.Vector3();
                 mappedObj.mesh.getWorldPosition(pos);
+                pos.boxId = targetCode; // Gắn thêm ID để hiển thị thông báo từng chặng
                 pointsToVisit.push(pos);
             }
         });
@@ -1853,6 +1913,7 @@ document.addEventListener('DOMContentLoaded', () => {
             unvisited.splice(nearestIdx, 1);
         }
         orderedVisits.push(END_POINT);
+        window.orderedVisits = orderedVisits; // Lưu lại để dùng cho việc highlight
 
         let curvePoints = [];
         const floorY = 0.15;
@@ -1894,7 +1955,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 3. Rẽ vào đúng điểm lấy hàng
             curvePoints.push(new THREE.Vector3(pNext.x, floorY, pNext.z));
-            curvePoints.push(new THREE.Vector3(pNext.x, pNext.y, pNext.z)); 
+            // KHÔNG TRÈO LÊN KỆ: Đã xóa dòng đẩy tọa độ Y lên cao
             
             if (i < orderedVisits.length - 1) {
                 curvePoints.push(new THREE.Vector3(pNext.x + 0.15, floorY, pNext.z));
@@ -1910,79 +1971,159 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         window.currentRoutePoints = finalCurve;
 
-        // Vẽ lại Texture Mũi tên chuẩn tỷ lệ (hình > sắc nét)
-        const arrowCanvas = document.createElement('canvas');
-        arrowCanvas.width = 128; arrowCanvas.height = 64;
-        const aCtx = arrowCanvas.getContext('2d');
-        aCtx.fillStyle = '#10b981';
-        aCtx.beginPath(); aCtx.moveTo(20, 16); aCtx.lineTo(80, 32); aCtx.lineTo(20, 48); aCtx.lineTo(36, 32); aCtx.fill();
-        
-        const arrowTex = new THREE.CanvasTexture(arrowCanvas);
-        arrowTex.wrapS = THREE.RepeatWrapping;
-        arrowTex.wrapT = THREE.RepeatWrapping;
+        // 1. TÌM VỊ TRÍ CHÍNH XÁC (INDEX) CỦA CÁC ĐIỂM DỪNG TRÊN ĐƯỜNG CONG
+        window.routeStopIndices = [];
+        orderedVisits.forEach((visit, index) => {
+            if (index === 0) return; // Bỏ qua điểm xuất phát
+            let minD = Infinity;
+            let bestIdx = 0;
+            finalCurve.forEach((pt, idx) => {
+                let d = pt.distanceTo(visit);
+                if (d < minD) { minD = d; bestIdx = idx; }
+            });
+            window.routeStopIndices.push(bestIdx);
+        });
 
-        const pathCurve = new THREE.CatmullRomCurve3(finalCurve, false, 'catmullrom', 0);
-        const pathLength = pathCurve.getLength();
-        
-        // Tự động tính lặp mũi tên dựa trên chiều dài đường (khoảng 1.2 mũi tên / mét)
-        arrowTex.repeat.set(Math.floor(pathLength * 1.2), 1); 
+// 2. TẠO TEXTURE NÉT ĐỨT (GIỐNG 2D)
+const dashCanvas = document.createElement('canvas');
+dashCanvas.width = 128; dashCanvas.height = 64;
+const dCtx = dashCanvas.getContext('2d');
 
-        const routeMat = new THREE.MeshBasicMaterial({ map: arrowTex, transparent: true, side: THREE.DoubleSide });
-        const routeGeo = new THREE.TubeGeometry(pathCurve, Math.floor(pathLength * 8), 0.1, 6, false);
+// Vẽ nét đứt: một nửa tô màu xanh ngọc, một nửa để trong suốt
+dCtx.fillStyle = '#10b981';
+dCtx.fillRect(0, 0, 64, 64); 
+
+const routeTex = new THREE.CanvasTexture(dashCanvas);
+routeTex.wrapS = THREE.RepeatWrapping;
+routeTex.wrapT = THREE.RepeatWrapping;
+window.routeTexture = routeTex;
         
-        if (window.currentRouteLine) scene.remove(window.currentRouteLine);
-        const displayMode = document.getElementById('route-display-mode-3d').value;
-        const btnNextStep = document.getElementById('btn-next-route-step');
-        
-        // Lưu trữ dữ liệu để vẽ từng bước
-        window.fullRouteCurve = pathCurve;
-        window.fullRouteLength = pathLength;
-        window.currentStepFraction = displayMode === 'full' ? 1.0 : (1.0 / window.selectedPickingItems.length);
-        
-        function drawCurrentRouteSegment() {
+        window.currentRouteStep = 0;
+
+        // 3. HÀM RENDER ĐƯỜNG ĐI ĐỘNG DỰA TRÊN CHẾ ĐỘ
+        window.updateRouteDisplay = function() {
+            if (!window.currentRoutePoints || window.currentRoutePoints.length < 2) return;
+            
+            const displayMode = document.getElementById('route-display-mode-3d').value;
+            const btnNextStep = document.getElementById('btn-next-route-step');
+            
             if (window.currentRouteLine) scene.remove(window.currentRouteLine);
             
-            // Rút trích đoạn đường dựa trên % tiến độ (currentStepFraction)
-            const segmentPoints = window.fullRouteCurve.getSpacedPoints(Math.floor(window.fullRouteLength * 8 * window.currentStepFraction));
-            if (segmentPoints.length < 2) return;
-            
-            const segmentCurve = new THREE.CatmullRomCurve3(segmentPoints, false);
-            const segmentLength = segmentCurve.getLength();
-            
-            arrowTex.repeat.set(Math.floor(segmentLength * 1.2), 1);
-            const segGeo = new THREE.TubeGeometry(segmentCurve, Math.floor(segmentLength * 8), 0.1, 6, false);
-            window.currentRouteLine = new THREE.Mesh(segGeo, routeMat);
-            scene.add(window.currentRouteLine);
-        }
-        
-        drawCurrentRouteSegment();
-        window.routeTexture = arrowTex;
-        
-        if (displayMode === 'step') {
-            btnNextStep.style.display = 'block';
-            // Gỡ event cũ trước khi gán mới để tránh bị lặp
-            btnNextStep.replaceWith(btnNextStep.cloneNode(true));
-            document.getElementById('btn-next-route-step').addEventListener('click', function() {
-                const stepAmount = 1.0 / window.selectedPickingItems.length;
-                window.currentStepFraction += stepAmount;
-                
-                if (window.currentStepFraction >= 0.99) {
-                    window.currentStepFraction = 1.0;
-                    this.style.display = 'none';
-                    showToast("Đã hiển thị chặng đường cuối cùng!");
+            let pointsToDraw = [];
+
+            if (displayMode === 'full') {
+                pointsToDraw = window.currentRoutePoints;
+                btnNextStep.style.display = 'none';
+            } else {
+                btnNextStep.style.display = 'block';
+                let startIdx = window.currentRouteStep === 0 ? 0 : window.routeStopIndices[window.currentRouteStep - 1];
+                let endIdx = window.routeStopIndices[window.currentRouteStep];
+
+                if (endIdx === undefined) {
+                    pointsToDraw = window.currentRoutePoints; 
+                    btnNextStep.style.display = 'none';
+                } else {
+                    pointsToDraw = window.currentRoutePoints.slice(startIdx, endIdx + 1);
                 }
-                drawCurrentRouteSegment();
+            }
+
+            // --- LÀM TỐI/XÓA PHÁT SÁNG CÁC HÀNG HÓA CŨ ---
+            boxMeshMap.forEach(item => {
+                if (item.mesh && item.mesh.material) {
+                    if (Array.isArray(item.mesh.material)) {
+                        item.mesh.material.forEach(m => { if(m.emissive) m.emissive.setHex(0x000000); });
+                    } else if (item.mesh.material.emissive) {
+                        item.mesh.material.emissive.setHex(0x000000);
+                    }
+                }
             });
-        } else {
-            btnNextStep.style.display = 'none';
+
+          // --- LÀM SÁNG HÀNG HÓA MỤC TIÊU HIỆN TẠI ---
+          if (displayMode === 'step' && window.routeStopIndices[window.currentRouteStep] !== undefined) {
+            const nextTargetId = window.orderedVisits[window.currentRouteStep + 1]?.boxId;
+                const targetObj = boxMeshMap.find(b => b.boxId === nextTargetId);
+                if (targetObj && targetObj.mesh) {
+                    const highlightColor = 0x44ff44; // Phát sáng màu xanh lá nhạt, nổi bật
+                    if (Array.isArray(targetObj.mesh.material)) {
+                        targetObj.mesh.material.forEach(m => { if(m.emissive) m.emissive.setHex(highlightColor); });
+                    } else if (targetObj.mesh.material.emissive) {
+                        targetObj.mesh.material.emissive.setHex(highlightColor);
+                    }
+                }
+            }
+
+            if (pointsToDraw.length < 2) return;
+
+            const pathCurve = new THREE.CatmullRomCurve3(pointsToDraw, false, 'catmullrom', 0);
+            const pathLength = pathCurve.getLength();
+            
+            // Tăng mật độ lặp để các nét đứt trông nhỏ gọn và sắc nét hơn
+            window.routeTexture.repeat.set(Math.max(1, Math.floor(pathLength * 2.5)), 1); 
+
+            const routeMat = new THREE.MeshBasicMaterial({ 
+                map: window.routeTexture, 
+                transparent: true, 
+                opacity: 0.85, // Làm mờ nhẹ để tạo cảm giác giống vết sơn hoặc băng keo dán sàn
+                side: THREE.DoubleSide 
+            });
+            
+            // Giảm bán kính xuống 0.05 (thay vì 0.1) -> Bề rộng vạch kẻ sẽ khoảng 10cm, rất thực tế
+            const routeGeo = new THREE.TubeGeometry(pathCurve, Math.floor(pathLength * 8) || 10, 0.05, 4, false);
+            
+            window.currentRouteLine = new THREE.Mesh(routeGeo, routeMat);
+            
+// Ép phẳng đường ống theo trục Y (xuống còn 0.01) để nó dẹp xuống thành mặt phẳng
+            window.currentRouteLine.scale.set(1, 0.01, 1);
+            
+            // Đặt cao hơn mặt sàn (Y=0.01) một chút xíu để không bị che khuất và dán chặt xuống sàn
+            window.currentRouteLine.position.y = 0.02; 
+            
+            scene.add(window.currentRouteLine);
+        };
+
+        // 4. ĐỒNG BỘ NÚT CHỌN CHẾ ĐỘ 3D
+        const modeSelector = document.getElementById('route-display-mode-3d');
+        if (!modeSelector.hasAttribute('data-bound')) {
+            modeSelector.addEventListener('change', () => {
+                window.currentRouteStep = 0; // Reset lại từ đầu khi đổi chế độ
+                window.updateRouteDisplay();
+            });
+            modeSelector.setAttribute('data-bound', 'true');
         }
 
-        window.routeTexture = arrowTex;
+        // Kế thừa lựa chọn từ Modal sang UI 3D
+        const modalMode = document.getElementById('route-display-mode').value;
+        modeSelector.value = modalMode;
+
+        // 5. CÀI ĐẶT SỰ KIỆN NÚT "NEXT STEP" (Dùng cloneNode để tránh lặp sự kiện)
+        const oldBtn = document.getElementById('btn-next-route-step');
+        const newBtn = oldBtn.cloneNode(true);
+        oldBtn.parentNode.replaceChild(newBtn, oldBtn);
+
+        newBtn.addEventListener('click', function() {
+            if (window.currentRouteStep < window.routeStopIndices.length - 1) {
+                window.currentRouteStep++;
+                window.updateRouteDisplay();
+                
+                const nextItem = orderedVisits[window.currentRouteStep].boxId;
+                const itemLabel = nextItem ? `mã ${nextItem}` : 'hàng hóa tiếp theo';
+                showToast(`Đã tới điểm! Đang di chuyển đến ${itemLabel}...`);
+            } else {
+                window.currentRouteStep++;
+                window.updateRouteDisplay();
+                showToast("🏁 Đã đến điểm cuối cùng (Cổng ra)!");
+                this.style.display = 'none';
+            }
+        });
+
+        // Kích hoạt render lần đầu tiên
+        window.updateRouteDisplay();
 
         // Đóng modal và chuyển sang Không gian 3D
         closeModal('modal-picking');
         document.querySelector('[data-tab="tab-3d"]').click();
         
+        showToast(`✅ Đã lập lộ trình Picking cho ${tagId}`);
         // Hiện pop-up chữ nhỏ báo thành công
         showToast(`✅ Đã lập lộ trình Picking cho ${tagId}`);
     });
@@ -2019,30 +2160,15 @@ function renderDynamicBox(sku) {
         boxGeo = new THREE.BoxGeometry(0.75, 0.6825, 0.96);
     }
 
-    // Tạo texture label với tên SKU
-    const labelCanvas = document.createElement('canvas');
-    labelCanvas.width = 256; labelCanvas.height = 128;
-    const lctx = labelCanvas.getContext('2d');
-    lctx.fillStyle = '#d2a679'; lctx.fillRect(0,0,256,128);
-    lctx.strokeStyle = '#8b5e3c'; lctx.lineWidth = 5; lctx.strokeRect(3,3,250,122);
-    lctx.fillStyle = '#fff8f0'; lctx.fillRect(8,8,240,112);
-    lctx.fillStyle = '#1e3a5f'; lctx.font = 'bold 20px monospace'; lctx.textAlign = 'center';
-    lctx.fillText(sku.code, 128, 42);
-    lctx.fillStyle = '#374151'; lctx.font = '15px sans-serif';
-    const shortName = sku.name.length > 16 ? sku.name.slice(0,16)+'…' : sku.name;
-    lctx.fillText(shortName, 128, 72);
-    lctx.fillStyle = '#6b7280'; lctx.font = '12px monospace';
-    lctx.fillText(loc, 128, 100);
-    const tex = new THREE.CanvasTexture(labelCanvas);
-
-    const mats = [
-        new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }),
-        new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }),
-        new THREE.MeshStandardMaterial({ color: 0xc49a6c, roughness: 0.9 }),
-        new THREE.MeshStandardMaterial({ color: 0xc49a6c, roughness: 0.9 }),
-        new THREE.MeshBasicMaterial({ map: tex }), // mặt trước
-        new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }),
-    ];
+// Xóa phần tạo texture label, chỉ dùng màu trơn cho các mặt
+const mats = [
+    new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }),
+    new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }),
+    new THREE.MeshStandardMaterial({ color: 0xc49a6c, roughness: 0.9 }),
+    new THREE.MeshStandardMaterial({ color: 0xc49a6c, roughness: 0.9 }),
+    new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }), // Mặt trước đổi thành màu trơn
+    new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.9 }),
+];
 
     const boxMesh = new THREE.Mesh(boxGeo, mats);
     boxMesh.add(new THREE.LineSegments(
