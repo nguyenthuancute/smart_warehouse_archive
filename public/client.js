@@ -953,15 +953,28 @@ if (window.routeTexture) {
 animate();
  
 window.addEventListener('resize', () => {
+    // 1. Cập nhật kích thước Không gian 3D
     const { clientWidth, clientHeight } = container;
-    if (clientWidth === 0 || clientHeight === 0) return;
-    camera.aspect = clientWidth / clientHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(clientWidth, clientHeight);
+    if (clientWidth > 0 && clientHeight > 0) {
+        camera.aspect = clientWidth / clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(clientWidth, clientHeight);
+    }
  
-    axisCamera.aspect = axisContainer.clientWidth / axisContainer.clientHeight;
-    axisCamera.updateProjectionMatrix();
-    axisRenderer.setSize(axisContainer.clientWidth, axisContainer.clientHeight);
+    // 2. Cập nhật kích thước trục tọa độ
+    if (axisContainer.clientWidth > 0 && axisContainer.clientHeight > 0) {
+        axisCamera.aspect = axisContainer.clientWidth / axisContainer.clientHeight;
+        axisCamera.updateProjectionMatrix();
+        axisRenderer.setSize(axisContainer.clientWidth, axisContainer.clientHeight);
+    }
+
+    // 3. FIX LỖI 2D: Cập nhật lại kích thước Canvas 2D để không bị sai tỉ lệ (móp méo)
+    const mapCont = document.getElementById('map-2d-container');
+    if (canvas2d && mapCont && mapCont.style.display !== 'none') {
+        // Gán lại kích thước thực tế của vùng chứa cho độ phân giải của canvas
+        canvas2d.width = mapCont.clientWidth;
+        canvas2d.height = mapCont.clientHeight;
+    }
 });
  
 // --- PRESET WAREHOUSE LOGIC ---
