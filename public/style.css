@@ -632,14 +632,18 @@ justify-content: center;
         margin-bottom: 5px;
     }
 
-    /* 4. Định dạng lại các Bảng Popup, Cài đặt nổi để không bị tràn viền */
+  /* 4. Định dạng lại Bảng Popup: Giới hạn chiều cao & bỏ transform để kéo thả chuẩn xác */
     .floating-panel, #floating-panel, #picking-panel {
         width: 94% !important;
-        max-width: 400px;
-        left: 50% !important;
-        transform: translateX(-50%) !important;
+        max-width: 400px !important;
+        left: 3% !important; /* Dùng lề trái thay vì transform để tránh giật lag khi kéo */
+        transform: none !important;
         right: auto !important;
-        top: 20px !important;
+        top: 60px !important;
+        max-height: 40vh !important; /* QUAN TRỌNG: Chỉ chiếm tối đa 40% màn hình, để lại 60% bên dưới cho bản đồ */
+        display: flex !important;
+        flex-direction: column !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3) !important;
     }
 
     /* 5. Căn giữa và phóng to nút "Đi đến điểm tiếp theo" để dễ bấm */
