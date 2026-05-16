@@ -169,7 +169,7 @@ body {
 .panel-header {
     display: flex;
     justify-content: space-between;
-align-items: center;
+    align-items: center;
     padding: 10px 15px;
     background-color: var(--bg-light);
     border-top-left-radius: 8px;
@@ -478,7 +478,7 @@ justify-content: center;
 #picking-panel {
     position: absolute;
     top: 20px;
-    right: 20px; /* Đặt bên phải cho đỡ vướng Settings */
+    right: 20px;
     left: auto;
     width: 300px;
     background-color: var(--bg-med);
@@ -541,6 +541,7 @@ justify-content: center;
     border-radius: 8px; font-size: .82em; color: #065f46;
     display: flex; gap: 18px; flex-wrap: wrap;
 }
+
 /* =========================================================
    BỔ SUNG: GIAO DIỆN HIỂN THỊ DÀNH CHO ĐIỆN THOẠI (MOBILE)
 ========================================================= */
@@ -585,21 +586,9 @@ justify-content: center;
         border-radius: 6px;
     }
 
-    /* Định dạng lại khung thông tin User (nếu có) trên Mobile */
+    /* XÓA (ẨN) KHU VỰC THÔNG TIN USER VÀ ĐĂNG XUẤT (Ảnh 1) */
     #sidebar > div:last-child {
-        display: flex !important;
-        flex-direction: row !important;
-        justify-content: space-between;
-        align-items: center;
-        padding: 5px 10px;
-        margin-top: 5px;
-        border-top: none !important;
-    }
-
-    #sidebar > div:last-child button {
-        width: auto !important;
-        padding: 5px 15px !important;
-        margin-top: 0 !important;
+        display: none !important;
     }
 
     /* 3. Mở rộng không gian hiển thị chính (Bản đồ kho) */
@@ -615,21 +604,30 @@ justify-content: center;
         padding: 10px;
     }
 
+    /* ẨN NÚT MŨI TÊN CHỌN CHẾ ĐỘ (Vùng khoanh bé ảnh 2) */
+    #route-display-mode-3d {
+        display: none !important;
+    }
+
+    /* ĐẨY CÁC NÚT CÀI ĐẶT SANG PHẢI (Vùng khoanh to ảnh 2) */
     .header-right {
-        flex-wrap: wrap;
-        justify-content: center;
+        display: flex;
+        flex-wrap: nowrap;
+        justify-content: flex-end;
+        align-items: center;
         width: 100%;
-        gap: 5px;
+        gap: 6px;
     }
 
     .header-right > * {
-        flex: 1 1 auto;
+        flex: none; /* Giữ nguyên kích thước nút, không giãn */
         font-size: 0.85em !important;
     }
 
     #sku-search-3d {
-        width: 100%;
-        margin-bottom: 5px;
+        flex: 1; /* Ô tìm kiếm tự động chiếm hết khoảng trống bên trái */
+        width: auto;
+        margin-bottom: 0;
     }
 
     /* 4. Định dạng lại các Bảng Popup, Cài đặt nổi để không bị tràn viền */
