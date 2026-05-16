@@ -47,11 +47,6 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<button id="mobile-menu-btn">☰</button>
-    <div id="zoom-controls">
-        <button id="btn-zoom-in">+</button>
-        <button id="btn-zoom-out">-</button>
-    </div>
     <div id="app-container">
         <div id="sidebar">
            <div class="sidebar-header">
@@ -97,22 +92,21 @@
             </div>
 
             <div id="tab-3d" class="tab-content">
-<div class="main-header">
+                <div class="main-header">
                     <div class="header-left">
                         </div>
                     <div class="header-right">
                         <select id="route-display-mode-3d" style="padding: 6px 10px; background: #374151; color: #fff; border: none; border-radius: 6px; font-size: 0.82em; cursor: pointer; margin-right: 8px;">
-                            <option value="full">Toàn bộ đường</option>
-                            <option value="step">Từng chặng</option>
+                            <option value="full"> Hiển thị đầy đủ</option>
+                            <option value="step"> Hiển thị từng chặng</option>
                         </select>
                         <input type="text" id="sku-search-3d" placeholder="Tìm kiếm SKU...">
                         <button id="btn-settings">Cài đặt</button>
                         <div id="mode-switcher">
                             <button id="btn-mode-3d" class="btn-mode active">3D</button>
-                            <button id="btn-mode-2d" class="btn-mode">2D</button>
+<button id="btn-mode-2d" class="btn-mode">2D</button>
                         </div>
                     </div>
-                    <button id="btn-toggle-toolbar">▼</button>
                 </div>
 
                 <div id="scene-container-wrapper">
