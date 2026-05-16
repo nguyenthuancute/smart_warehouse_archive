@@ -71,7 +71,6 @@ canvas2d.addEventListener('wheel', (e) => {
 });
 
 // Sự kiện Nhấn chuột để di chuyển (Pan)
-// Sự kiện Nhấn chuột để di chuyển (Pan) - Dành cho PC
 canvas2d.addEventListener('mousedown', (e) => {
     isMapDragging = true;
     mapLastMouse = { x: e.clientX, y: e.clientY };
@@ -87,58 +86,6 @@ window.addEventListener('mousemove', (e) => {
 });
 
 window.addEventListener('mouseup', () => { isMapDragging = false; });
-
-// --- THÊM SỰ KIỆN CẢM ỨNG (TOUCH) DÀNH CHO ĐIỆN THOẠI ---
-let initialPinchDist = null;
-
-canvas2d.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 1) { // Chạm 1 ngón để di chuyển
-        isMapDragging = true;
-        mapLastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    } else if (e.touches.length === 2) { // Chạm 2 ngón để chuẩn bị Zoom
-        isMapDragging = false;
-        initialPinchDist = Math.hypot(
-            e.touches[0].clientX - e.touches[1].clientX,
-            e.touches[0].clientY - e.touches[1].clientY
-        );
-    }
-}, { passive: false });
-
-canvas2d.addEventListener('touchmove', (e) => {
-    e.preventDefault(); // Ngăn trình duyệt cuộn trang khi đang vuốt bản đồ
-    if (e.touches.length === 1 && isMapDragging) {
-        const dx = e.touches[0].clientX - mapLastMouse.x;
-        const dy = e.touches[0].clientY - mapLastMouse.y;
-        mapPan.x += dx;
-        mapPan.y += dy;
-        mapLastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    } else if (e.touches.length === 2 && initialPinchDist !== null) {
-        const currentPinchDist = Math.hypot(
-            e.touches[0].clientX - e.touches[1].clientX,
-            e.touches[0].clientY - e.touches[1].clientY
-        );
-        
-        // Tính toán khoảng cách 2 ngón tay để Zoom in/out
-        const zoomSpeed = 0.03;
-        if (currentPinchDist > initialPinchDist) {
-            mapZoom *= (1 + zoomSpeed); // Kéo giãn ra -> Zoom in
-        } else if (currentPinchDist < initialPinchDist) {
-            mapZoom /= (1 + zoomSpeed); // Thu hẹp lại -> Zoom out
-        }
-        mapZoom = Math.min(Math.max(0.5, mapZoom), 5); // Giới hạn mức zoom
-        initialPinchDist = currentPinchDist;
-    }
-}, { passive: false });
-
-canvas2d.addEventListener('touchend', (e) => {
-    if (e.touches.length < 2) initialPinchDist = null;
-    if (e.touches.length === 1) {
-        isMapDragging = true;
-        mapLastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    } else {
-        isMapDragging = false;
-    }
-});
 // Đặt kích thước cho canvas
 if (canvas2d) {
     canvas2d.width = window.innerWidth - 260 || 800; 
@@ -954,28 +901,15 @@ if (window.routeTexture) {
 animate();
  
 window.addEventListener('resize', () => {
-    // 1. Cập nhật kích thước Không gian 3D
     const { clientWidth, clientHeight } = container;
-    if (clientWidth > 0 && clientHeight > 0) {
-        camera.aspect = clientWidth / clientHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(clientWidth, clientHeight);
-    }
+    if (clientWidth === 0 || clientHeight === 0) return;
+    camera.aspect = clientWidth / clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(clientWidth, clientHeight);
  
-    // 2. Cập nhật kích thước trục tọa độ
-    if (axisContainer.clientWidth > 0 && axisContainer.clientHeight > 0) {
-        axisCamera.aspect = axisContainer.clientWidth / axisContainer.clientHeight;
-        axisCamera.updateProjectionMatrix();
-        axisRenderer.setSize(axisContainer.clientWidth, axisContainer.clientHeight);
-    }
-
-    // 3. FIX LỖI 2D: Cập nhật lại kích thước Canvas 2D để không bị sai tỉ lệ (móp méo)
-    const mapCont = document.getElementById('map-2d-container');
-    if (canvas2d && mapCont && mapCont.style.display !== 'none') {
-        // Gán lại kích thước thực tế của vùng chứa cho độ phân giải của canvas
-        canvas2d.width = mapCont.clientWidth;
-        canvas2d.height = mapCont.clientHeight;
-    }
+    axisCamera.aspect = axisContainer.clientWidth / axisContainer.clientHeight;
+    axisCamera.updateProjectionMatrix();
+    axisRenderer.setSize(axisContainer.clientWidth, axisContainer.clientHeight);
 });
  
 // --- PRESET WAREHOUSE LOGIC ---
@@ -1271,12 +1205,6 @@ settingsBtn.addEventListener('click', () => {
  
 closePanelBtn.addEventListener('click', () => {
     floatingPanel.style.display = 'none';
-    
-    // --- KHẮC PHỤC LỖI TRẮNG MÀN HÌNH TRÊN ĐIỆN THOẠI ---
-    // Gọi lệnh resize để ép bản vẽ 3D lấp đầy lại màn hình.
-    // Dùng setTimeout để đợi bàn phím ảo của điện thoại thụt xuống hoàn toàn.
-    setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 100);
-    setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 400); 
 });
  
 let isDragging = false;
@@ -2746,99 +2674,5 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             headerSku.appendChild(btn);
         }
-    }
-});
-// ==========================================
-// BỔ SUNG: XỬ LÝ NÚT MENU & ZOOM CHO MOBILE
-// ==========================================
-document.addEventListener('DOMContentLoaded', () => {
-    const menuBtn = document.getElementById('mobile-menu-btn');
-    const sidebar = document.getElementById('sidebar');
-
-    if (menuBtn && sidebar) {
-        // Bấm nút để đóng/mở thanh menu
-        menuBtn.addEventListener('click', () => {
-            sidebar.classList.toggle('open');
-        });
-
-        // Tự động đóng menu khi chọn một mục bất kỳ trên Mobile
-        document.querySelectorAll('.sidebar-menu a').forEach(link => {
-            link.addEventListener('click', () => {
-                if (window.innerWidth <= 768) {
-                    sidebar.classList.remove('open');
-                }
-            });
-        });
-    }
-});
-
-// Xử lý Nút Zoom (+/-)
-const btnZoomIn = document.getElementById('btn-zoom-in');
-const btnZoomOut = document.getElementById('btn-zoom-out');
-
-if (btnZoomIn && btnZoomOut) {
-    btnZoomIn.addEventListener('click', () => {
-        const is2D = document.getElementById('btn-mode-2d').classList.contains('active');
-        if (is2D) {
-            // Zoom in 2D
-            if (typeof mapZoom !== 'undefined' && typeof render2D === 'function') {
-                mapZoom *= 1.3;
-                render2D();
-            }
-        } else {
-            // Zoom in 3D (Kéo Camera tiến gần lại mục tiêu 30%)
-            if (typeof camera !== 'undefined' && typeof controls !== 'undefined') {
-                const dist = camera.position.distanceTo(controls.target);
-                const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
-                camera.position.copy(controls.target).add(dir.multiplyScalar(dist * 0.7));
-                controls.update();
-            }
-        }
-    });
-
-    btnZoomOut.addEventListener('click', () => {
-        const is2D = document.getElementById('btn-mode-2d').classList.contains('active');
-        if (is2D) {
-            // Zoom out 2D
-            if (typeof mapZoom !== 'undefined' && typeof render2D === 'function') {
-                mapZoom /= 1.3;
-                render2D();
-            }
-        } else {
-            // Zoom out 3D (Đẩy Camera lùi ra xa 30%)
-            if (typeof camera !== 'undefined' && typeof controls !== 'undefined') {
-                const dist = camera.position.distanceTo(controls.target);
-                const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
-                camera.position.copy(controls.target).add(dir.multiplyScalar(dist * 1.3));
-                controls.update();
-            }
-        }
-    });
-}
-// ==========================================
-// BỔ SUNG: XỬ LÝ THU GỌN TOOLBAR 3D
-// ==========================================
-document.addEventListener('DOMContentLoaded', () => {
-    const toggleBtn = document.getElementById('btn-toggle-toolbar');
-    const mainHeader = document.querySelector('.main-header');
-
-    if (toggleBtn && mainHeader) {
-        toggleBtn.addEventListener('click', () => {
-            mainHeader.classList.toggle('collapsed');
-            
-            // Đổi icon mũi tên
-            if (mainHeader.classList.contains('collapsed')) {
-                toggleBtn.textContent = '▲';
-            } else {
-                toggleBtn.textContent = '▼';
-            }
-            
-            // Cập nhật lại khung nhìn 3D sau khi header thay đổi kích thước
-            setTimeout(() => {
-                if (typeof onWindowResize === 'function') {
-                    onWindowResize();
-                }
-            }, 300);
-        });
     }
 });
