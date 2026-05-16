@@ -71,6 +71,7 @@ canvas2d.addEventListener('wheel', (e) => {
 });
 
 // Sự kiện Nhấn chuột để di chuyển (Pan)
+// Sự kiện Nhấn chuột để di chuyển (Pan) - Dành cho PC
 canvas2d.addEventListener('mousedown', (e) => {
     isMapDragging = true;
     mapLastMouse = { x: e.clientX, y: e.clientY };
@@ -86,6 +87,58 @@ window.addEventListener('mousemove', (e) => {
 });
 
 window.addEventListener('mouseup', () => { isMapDragging = false; });
+
+// --- THÊM SỰ KIỆN CẢM ỨNG (TOUCH) DÀNH CHO ĐIỆN THOẠI ---
+let initialPinchDist = null;
+
+canvas2d.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1) { // Chạm 1 ngón để di chuyển
+        isMapDragging = true;
+        mapLastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    } else if (e.touches.length === 2) { // Chạm 2 ngón để chuẩn bị Zoom
+        isMapDragging = false;
+        initialPinchDist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+        );
+    }
+}, { passive: false });
+
+canvas2d.addEventListener('touchmove', (e) => {
+    e.preventDefault(); // Ngăn trình duyệt cuộn trang khi đang vuốt bản đồ
+    if (e.touches.length === 1 && isMapDragging) {
+        const dx = e.touches[0].clientX - mapLastMouse.x;
+        const dy = e.touches[0].clientY - mapLastMouse.y;
+        mapPan.x += dx;
+        mapPan.y += dy;
+        mapLastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    } else if (e.touches.length === 2 && initialPinchDist !== null) {
+        const currentPinchDist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+        );
+        
+        // Tính toán khoảng cách 2 ngón tay để Zoom in/out
+        const zoomSpeed = 0.03;
+        if (currentPinchDist > initialPinchDist) {
+            mapZoom *= (1 + zoomSpeed); // Kéo giãn ra -> Zoom in
+        } else if (currentPinchDist < initialPinchDist) {
+            mapZoom /= (1 + zoomSpeed); // Thu hẹp lại -> Zoom out
+        }
+        mapZoom = Math.min(Math.max(0.5, mapZoom), 5); // Giới hạn mức zoom
+        initialPinchDist = currentPinchDist;
+    }
+}, { passive: false });
+
+canvas2d.addEventListener('touchend', (e) => {
+    if (e.touches.length < 2) initialPinchDist = null;
+    if (e.touches.length === 1) {
+        isMapDragging = true;
+        mapLastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    } else {
+        isMapDragging = false;
+    }
+});
 // Đặt kích thước cho canvas
 if (canvas2d) {
     canvas2d.width = window.innerWidth - 260 || 800; 
@@ -1205,6 +1258,12 @@ settingsBtn.addEventListener('click', () => {
  
 closePanelBtn.addEventListener('click', () => {
     floatingPanel.style.display = 'none';
+    
+    // --- KHẮC PHỤC LỖI TRẮNG MÀN HÌNH TRÊN ĐIỆN THOẠI ---
+    // Gọi lệnh resize để ép bản vẽ 3D lấp đầy lại màn hình.
+    // Dùng setTimeout để đợi bàn phím ảo của điện thoại thụt xuống hoàn toàn.
+    setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 100);
+    setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 400); 
 });
  
 let isDragging = false;
