@@ -169,7 +169,7 @@ body {
 .panel-header {
     display: flex;
     justify-content: space-between;
-align-items: center;
+    align-items: center;
     padding: 10px 15px;
     background-color: var(--bg-light);
     border-top-left-radius: 8px;
@@ -540,106 +540,4 @@ justify-content: center;
     margin-top: 10px; padding: 10px 14px; background: #f0fdf4;
     border-radius: 8px; font-size: .82em; color: #065f46;
     display: flex; gap: 18px; flex-wrap: wrap;
-}
-/* Ẩn các nút điều khiển mobile khi ở trên máy tính */
-#mobile-menu-btn { display: none; }
-#zoom-controls { display: none; }
-
-/* =========================================================
-   RESPONSIVE HOÀN HẢO CHO ĐIỆN THOẠI (MÀN HÌNH DỌC)
-========================================================= */
-@media (max-width: 768px) {
-    /* Khóa cứng chiều cao màn hình, không cho trình duyệt cuộn trang tự do */
-    html, body {
-        height: 100% !important;
-        overflow: hidden !important;
-        margin: 0;
-        padding: 0;
-    }
-    
-    #app-container {
-        display: flex !important;
-        flex-direction: column !important;
-        height: 100vh !important;
-        overflow: hidden !important;
-    }
-    
-    /* Thu gọn thanh Menu thành một dải cuộn ngang ở phía trên */
-    #sidebar {
-        width: 100% !important;
-        padding: 8px !important;
-        box-sizing: border-box !important;
-        flex-shrink: 0 !important;
-    }
-    .sidebar-menu {
-        display: flex !important;
-        overflow-x: auto !important;
-        margin-top: 5px !important;
-        gap: 6px !important;
-        padding-bottom: 4px !important;
-    }
-    .sidebar-menu li a {
-        margin-bottom: 0 !important;
-        white-space: nowrap !important;
-        padding: 6px 10px !important;
-        font-size: 13px !important;
-    }
-    
-    /* Khu vực hiển thị chính chiếm trọn phần không gian còn lại */
-    #main-content {
-        padding: 4px !important;
-        flex-grow: 1 !important;
-        display: flex !important;
-        flex-direction: column !important;
-        height: 0 !important; /* Kỹ thuật ép Flexbox lấp đầy không gian */
-        overflow: hidden !important;
-    }
-    
-    /* Ép các Tab hiển thị (3D/2D) giãn căng 100% */
-    .tab-content.active {
-        display: flex !important;
-        flex-direction: column !important;
-        flex-grow: 1 !important;
-        height: 100% !important;
-    }
-    
-    /* FIX LỖI KHOẢNG TRẮNG: Ép khung chứa bản đồ 3D và 2D phủ kín toàn bộ màn hình dọc */
-    #scene-container-wrapper, #map-2d-container {
-        flex-grow: 1 !important;
-        height: 100% !important;
-        min-height: 0 !important; /* Triệt tiêu hoàn toàn khoảng trống thừa bên dưới */
-        position: relative !important;
-    }
-    
-    #scene-container, #map-2d {
-        width: 100% !important;
-        height: 100% !important;
-    }
-    
-    /* Thu gọn phần tiêu đề để nhường không gian cho bản đồ */
-    .main-header {
-        margin-bottom: 4px !important;
-        padding: 4px !important;
-    }
-
-    /* 1. DI CHUYỂN NÚT MŨI TÊN MỞ BẢNG CÀI ĐẶT LÊN TRÊN GÓC MÀN HÌNH */
-    #btn-toggle-panel, .toggle-panel-btn, 
-    button[id*="toggle"], button[class*="toggle"] {
-        position: fixed !important;
-        top: 10px !important;
-        right: 10px !important;
-        bottom: auto !important;
-        left: auto !important;
-        z-index: 9999 !important;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
-    }
-    
-    /* Căn chỉnh lại panel cài đặt khi mở ra trên điện thoại */
-    #floating-panel {
-        width: 92% !important;
-        left: 4% !important;
-        top: 60px !important;
-        max-height: 80vh !important;
-        overflow-y: auto !important;
-    }
 }
