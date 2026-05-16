@@ -169,7 +169,7 @@ body {
 .panel-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+align-items: center;
     padding: 10px 15px;
     background-color: var(--bg-light);
     border-top-left-radius: 8px;
@@ -478,7 +478,7 @@ justify-content: center;
 #picking-panel {
     position: absolute;
     top: 20px;
-    right: 20px;
+    right: 20px; /* Đặt bên phải cho đỡ vướng Settings */
     left: auto;
     width: 300px;
     background-color: var(--bg-med);
@@ -541,7 +541,7 @@ justify-content: center;
     border-radius: 8px; font-size: .82em; color: #065f46;
     display: flex; gap: 18px; flex-wrap: wrap;
 }
- /* =========================================================
+/* =========================================================
    BỔ SUNG: GIAO DIỆN HIỂN THỊ DÀNH CHO ĐIỆN THOẠI (MOBILE)
 ========================================================= */
 @media screen and (max-width: 768px) {
