@@ -692,3 +692,73 @@ justify-content: center;
         transform: translateX(-50%) rotate(180deg); /* Lật ngược mũi tên */
     }
 }
+/* =========================================================
+   RESPONSIVE DÀNH CHO ĐIỆN THOẠI (MÀN HÌNH DỌC)
+========================================================= */
+@media (max-width: 768px) {
+    #app-container {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+    }
+    
+    /* Thu gọn thanh Sidebar thành menu cuộn ngang phía trên */
+    #sidebar {
+        width: 100%;
+        padding: 10px;
+        box-sizing: border-box;
+        flex-shrink: 0;
+    }
+    .sidebar-menu {
+        display: flex;
+        overflow-x: auto;
+        margin-top: 10px;
+        gap: 8px;
+    }
+    .sidebar-menu li a {
+        margin-bottom: 0;
+        white-space: nowrap;
+        padding: 8px 12px;
+    }
+    
+    /* Thiết lập phần nội dung chính tự động giãn ra khít màn hình */
+    #main-content {
+        padding: 10px;
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+    }
+    
+    /* Ép Tab 3D/2D lấp đầy chiều cao còn lại, dẹp bỏ khoảng trắng */
+    #tab-3d.active {
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+    }
+    #scene-container-wrapper {
+        height: auto;
+        flex-grow: 1; /* Tự động phình to ra để lấp đầy, không thừa 1 pixel nào */
+        min-height: 50vh; 
+    }
+    
+    /* Chỉnh lại Header cho ngay ngắn trên điện thoại */
+    .main-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+    .header-right {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    /* Căn giữa bảng Cài đặt */
+    #floating-panel {
+        width: 90%;
+        left: 5%;
+        top: 50px;
+    }
+}
