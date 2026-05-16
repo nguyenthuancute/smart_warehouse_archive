@@ -1262,28 +1262,51 @@ closePanelBtn.addEventListener('click', () => {
  
 let isDragging = false;
 let startX, startY, initialX, initialY;
- 
-panelHeader.addEventListener('mousedown', (e) => {
+
+// Hàm bắt đầu kéo (Hỗ trợ cả Chuột & Cảm ứng)
+function startDrag(e) {
+    if (e.target === closePanelBtn) return; // Bỏ qua nếu bấm trúng nút X
     isDragging = true;
-    startX = e.clientX;
-    startY = e.clientY;
+    const clientX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+    const clientY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+    startX = clientX;
+    startY = clientY;
     initialX = floatingPanel.offsetLeft;
     initialY = floatingPanel.offsetTop;
     panelHeader.style.cursor = 'grabbing';
-});
- 
-document.addEventListener('mousemove', (e) => {
+}
+
+// Hàm xử lý di chuyển
+function drag(e) {
     if (!isDragging) return;
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
+    const clientX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+    const clientY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+    const dx = clientX - startX;
+    const dy = clientY - startY;
     floatingPanel.style.left = (initialX + dx) + 'px';
     floatingPanel.style.top = (initialY + dy) + 'px';
-});
- 
-document.addEventListener('mouseup', () => {
+}
+
+// Hàm kết thúc kéo
+function endDrag() {
     isDragging = false;
     panelHeader.style.cursor = 'grab';
-});
+}
+
+// Gắn sự kiện cho Máy tính (Mouse)
+panelHeader.addEventListener('mousedown', startDrag);
+document.addEventListener('mousemove', drag);
+document.addEventListener('mouseup', endDrag);
+
+// Gắn sự kiện cho Điện thoại (Touch)
+panelHeader.addEventListener('touchstart', startDrag, { passive: false });
+document.addEventListener('touchmove', (e) => {
+    if (isDragging) {
+        e.preventDefault(); // Ngăn trình duyệt cuộn trang khi đang kéo bảng
+        drag(e);
+    }
+}, { passive: false });
+document.addEventListener('touchend', endDrag);
  
 // Switch between 3D and 2D modes
 const btn3d = document.getElementById('btn-mode-3d');
