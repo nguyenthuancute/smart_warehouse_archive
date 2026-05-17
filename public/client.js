@@ -758,6 +758,9 @@ socket.on('tags_update', (data) => {
             recordMovement(id, pos.x, pos.y, pos.z);
         });
     }
+
+    // Đồng bộ trạng thái Active/Offline theo Tag đang hoạt động
+    syncTagStatus(Object.keys(data));
  
     if (isRecording) {
         const now = new Date();
@@ -774,6 +777,39 @@ socket.on('tags_update', (data) => {
         });
     }
 });
+
+// ══ ĐỒNG BỘ TRẠNG THÁI ACTIVE/OFFLINE THEO TAG ══
+const tagLastSeen = {}; // { tagId: timestamp }
+const TAG_TIMEOUT = 15000; // 15 giây không nhận dữ liệu → Offline
+
+function syncTagStatus(activeTagIds) {
+    const now = Date.now();
+    // Cập nhật thời gian nhận dữ liệu
+    activeTagIds.forEach(id => { tagLastSeen[id] = now; });
+
+    let changed = false;
+    // Cập nhật nhân viên
+    store.employees.forEach(e => {
+        const isAlive = tagLastSeen[e.tag] && (now - tagLastSeen[e.tag] < TAG_TIMEOUT);
+        const newStatus = isAlive ? 'active' : 'inactive';
+        if (e.status !== newStatus) { e.status = newStatus; changed = true; }
+    });
+    // Cập nhật xe nâng
+    store.forklifts.forEach(f => {
+        const isAlive = tagLastSeen[f.tag] && (now - tagLastSeen[f.tag] < TAG_TIMEOUT);
+        const newStatus = isAlive ? 'active' : 'inactive';
+        if (f.status !== newStatus) { f.status = newStatus; changed = true; }
+    });
+
+    if (changed) {
+        if (typeof renderEmployees === 'function') renderEmployees();
+        if (typeof renderForklifts === 'function') renderForklifts();
+        if (typeof updateDashboard === 'function') updateDashboard();
+    }
+}
+
+// Kiểm tra định kỳ — chuyển Tag cũ về Offline
+setInterval(() => { syncTagStatus([]); }, 10000);
  
 // --- ANIMATION LOOP & RESIZE ---\
 function render2D() {
@@ -1026,6 +1062,13 @@ presetGroup.add(mesh);
         const tierSpacing = (topTierY - bottomTierY) / (tiers - 1); 
         const totalZ = bays * bayLength;
  
+        // Pallet materials
+        const palletMat = new THREE.MeshStandardMaterial({ color: 0xb8860b, roughness: 0.95 });
+        const palletEdgeMat = new THREE.LineBasicMaterial({ color: 0x8B6914, linewidth: 1 });
+        const palletH = 0.04; // Chiều cao pallet ~4cm
+        const palletW = sizeX * 0.88;
+        const palletD = bayLength * 0.85;
+
         for (let j = 0; j <= bays; j++) {
             const isProtruding = (j % 2 === 0); 
             const pH = isProtruding ? sizeY : topTierY + shelfThick / 2; 
@@ -1055,6 +1098,33 @@ presetGroup.add(mesh);
                 const tierY = bottomTierY + i * tierSpacing;
                 shelf.position.set(0, tierY, shelfZ);
                 rackGroup.add(shelf);
+
+                // ═══ PALLET trên mỗi ô kệ ═══
+                const palletGroup = new THREE.Group();
+                // Mặt trên pallet (3 thanh ngang)
+                const plankTopGeo = new THREE.BoxGeometry(palletW, palletH * 0.4, palletD / 3.5);
+                for (let p = 0; p < 3; p++) {
+                    const plank = new THREE.Mesh(plankTopGeo, palletMat);
+                    plank.position.set(0, palletH * 0.8, (p - 1) * (palletD / 3));
+                    palletGroup.add(plank);
+                }
+                // Thanh dọc đỡ (2 thanh)
+                const plankSideGeo = new THREE.BoxGeometry(palletW * 0.12, palletH, palletD);
+                for (let s = -1; s <= 1; s += 2) {
+                    const side = new THREE.Mesh(plankSideGeo, palletMat);
+                    side.position.set(s * palletW * 0.35, palletH * 0.4, 0);
+                    palletGroup.add(side);
+                }
+                // Viền pallet
+                const palletOuterGeo = new THREE.BoxGeometry(palletW, palletH, palletD);
+                const palletEdges = new THREE.EdgesGeometry(palletOuterGeo);
+                const edgeLine = new THREE.LineSegments(palletEdges, palletEdgeMat);
+                edgeLine.position.y = palletH * 0.5;
+                palletGroup.add(edgeLine);
+
+                palletGroup.position.set(0, tierY + shelfThick / 2, shelfZ);
+                rackGroup.add(palletGroup);
+
                 if (hasBoxes) {
                     const boxId = `${rackId}-B${j+1}T${i+1}`;
                     const boxInfo = boxesData[boxId] || {};
@@ -1326,6 +1396,8 @@ function showWarehouse3D() {
         if (!scene.getObjectByName('presetGroup')) {
             loadMekongPreset();
         }
+        // Đồng bộ tất cả SKU hiện có vào 3D
+        syncSkusTo3D();
         renderer.setSize(sceneContainer.clientWidth, sceneContainer.clientHeight);
         camera.aspect = sceneContainer.clientWidth / sceneContainer.clientHeight;
         camera.updateProjectionMatrix();
@@ -1370,15 +1442,15 @@ coll.addEventListener('click', () => {
 // --- Dữ liệu lưu trong bộ nhớ ---
 const store = {
     employees: [
-        { id: 'NV-001', name: 'Nguyễn Văn An', role: 'Kỹ thuật viên', status: 'active', tag: 'TAG-A01' },
-        { id: 'NV-002', name: 'Trần Thị Bình', role: 'Quản lý kho', status: 'active', tag: 'TAG-A02' },
-        { id: 'NV-003', name: 'Lê Hoàng Cường', role: 'Vận hành xe nâng', status: 'active', tag: 'TAG-A03' },
+        { id: 'NV-001', name: 'Nguyễn Văn An', role: 'Kỹ thuật viên', status: 'inactive', tag: 'TAG-A01' },
+        { id: 'NV-002', name: 'Trần Thị Bình', role: 'Quản lý kho', status: 'inactive', tag: 'TAG-A02' },
+        { id: 'NV-003', name: 'Lê Hoàng Cường', role: 'Vận hành xe nâng', status: 'inactive', tag: 'TAG-A03' },
         { id: 'NV-004', name: 'Phạm Minh Đức', role: 'Nhân viên kiểm kê', status: 'inactive', tag: 'TAG-A04' },
-        { id: 'NV-005', name: 'Hoàng Thị Em', role: 'Kỹ thuật viên', status: 'active', tag: 'TAG-A05' },
+        { id: 'NV-005', name: 'Hoàng Thị Em', role: 'Kỹ thuật viên', status: 'inactive', tag: 'TAG-A05' },
     ],
     forklifts: [
-        { id: 'FL-001', type: 'Điện 2.5T', status: 'active', location: 'Khu A', tag: 'TAG-F01' },
-        { id: 'FL-002', type: 'Diesel 3T', status: 'active', location: 'Khu B', tag: 'TAG-F02' },
+        { id: 'FL-001', type: 'Điện 2.5T', status: 'inactive', location: 'Khu A', tag: 'TAG-F01' },
+        { id: 'FL-002', type: 'Diesel 3T', status: 'inactive', location: 'Khu B', tag: 'TAG-F02' },
         { id: 'FL-003', type: 'Điện 1.5T', status: 'inactive', location: 'Bảo trì', tag: 'TAG-F03' },
     ],
     skus: [
@@ -1392,12 +1464,34 @@ const store = {
     deliveries: []
 };
 
-// --- Lịch sử di chuyển ---
-const movementLogs = [];
-const MAX_LOGS = 500;
+// --- Lịch sử di chuyển (PHIÊN) ---
+const movementSessions = [];
 
-// Tạo dữ liệu log giả lập ban đầu
-(function generateMockLogs() {
+// Tạo đường đi giả lập qua các kệ trong kho
+function generatePath(steps) {
+    const pts = [];
+    // Các điểm chính trong kho (x, z theo layout 15x30m)
+    const waypoints = [
+        {x:1,y:1},{x:1,y:14},{x:5,y:14},{x:5,y:5},{x:2.4,y:5},{x:2.4,y:9},
+        {x:6.4,y:9},{x:6.4,y:3},{x:7.5,y:3},{x:7.5,y:14},{x:10,y:14},
+        {x:14.5,y:14},{x:14.5,y:5},{x:10,y:5},{x:10,y:1},{x:1,y:1}
+    ];
+    let wi = Math.floor(Math.random() * waypoints.length);
+    for (let i = 0; i < steps; i++) {
+        const wp = waypoints[wi % waypoints.length];
+        const next = waypoints[(wi + 1) % waypoints.length];
+        const t = (i % 4) / 4;
+        pts.push({
+            x: +(wp.x + (next.x - wp.x) * t + (Math.random()-0.5)*0.3).toFixed(2),
+            y: +(wp.y + (next.y - wp.y) * t + (Math.random()-0.5)*0.3).toFixed(2),
+            z: +(0.3 + Math.random()*0.2).toFixed(2)
+        });
+        if (i % 4 === 3) wi++;
+    }
+    return pts;
+}
+
+(function generateMockSessions() {
     const tags = [
         { tag: 'TAG-A01', name: 'Nguyễn Văn An' },
         { tag: 'TAG-A02', name: 'Trần Thị Bình' },
@@ -1406,15 +1500,17 @@ const MAX_LOGS = 500;
         { tag: 'TAG-F02', name: 'Xe nâng FL-002' },
     ];
     const now = Date.now();
-    for (let i = 0; i < 50; i++) {
-        const t = tags[Math.floor(Math.random() * tags.length)];
-        movementLogs.push({
-            timestamp: new Date(now - (50 - i) * 60000).toISOString(),
-            tagId: t.tag,
-            name: t.name,
-            x: (Math.random() * 28 + 1).toFixed(2),
-            y: (Math.random() * 18 + 1).toFixed(2),
-            z: (Math.random() * 0.5 + 0.3).toFixed(2)
+    for (let i = 0; i < 8; i++) {
+        const t = tags[i % tags.length];
+        const dur = 10 + Math.floor(Math.random() * 50); // phút
+        const start = new Date(now - (8 - i) * 3600000 - dur * 60000);
+        const end = new Date(start.getTime() + dur * 60000);
+        movementSessions.push({
+            id: 'S' + String(i+1).padStart(3,'0'),
+            tagId: t.tag, name: t.name,
+            startTime: start.toISOString(),
+            endTime: end.toISOString(),
+            points: generatePath(20 + Math.floor(Math.random() * 30))
         });
     }
 })();
@@ -1482,7 +1578,7 @@ function renderEmployees() {
             <td>${e.id}</td>
             <td>${e.name}</td>
 <td>${e.role}</td>
-            <td><span class="status-badge ${e.status === 'active' ? 'status-active' : 'status-inactive'}">${e.status === 'active' ? 'Đang làm việc' : 'Nghỉ'}</span></td>
+            <td><span class="status-badge ${e.status === 'active' ? 'status-active' : 'status-inactive'}">${e.status === 'active' ? 'Active' : 'Offline'}</span></td>
             <td>${e.tag}</td>
             <td>
                 <button class="btn-row-action btn-row-delete" onclick="deleteItem('employees','${e.id}', renderEmployees)">Xóa</button>
@@ -1526,7 +1622,7 @@ function renderForklifts() {
         <tr>
             <td>${f.id}</td>
             <td>${f.type}</td>
-            <td><span class="status-badge ${f.status === 'active' ? 'status-active' : 'status-inactive'}">${f.status === 'active' ? 'Hoạt động' : 'Bảo trì'}</span></td>
+            <td><span class="status-badge ${f.status === 'active' ? 'status-active' : 'status-inactive'}">${f.status === 'active' ? 'Active' : 'Offline'}</span></td>
             <td>${f.location}</td>
             <td>${f.tag}</td>
             <td>
@@ -1673,217 +1769,266 @@ function updateDashboard() {
     el('dash-fork-total').textContent = store.forklifts.length;
     el('dash-sku-total').textContent = store.skus.length;
     el('dash-sku-qty').textContent = store.skus.reduce((s, k) => s + k.quantity, 0).toLocaleString('vi-VN');
-    el('dash-log-total').textContent = movementLogs.length;
+    el('dash-log-total').textContent = movementSessions.length;
 }
 
 // ══════════════════════════════════════════════
-// LỊCH SỬ DI CHUYỂN - RENDER LOG TABLE
+// LỊCH SỬ DI CHUYỂN - RENDER SESSION TABLE
 // ══════════════════════════════════════════════
+function fmtTime(iso) {
+    const d = new Date(iso);
+    return d.toLocaleTimeString('vi-VN') + ' ' + d.toLocaleDateString('vi-VN');
+}
+
 function renderLogs() {
     const tbody = document.getElementById('log-tbody');
     if (!tbody) return;
-    const filter = document.getElementById('log-tag-filter').value;
-    const logs = filter === 'all' ? movementLogs : movementLogs.filter(l => l.tagId === filter);
-    
-    // Hiển thị mới nhất lên đầu
-    tbody.innerHTML = logs.slice().reverse().map(l => {
-        const t = new Date(l.timestamp);
-        const time = t.toLocaleTimeString('vi-VN') + ' ' + t.toLocaleDateString('vi-VN');
-        return `<tr>
-            <td>${time}</td>
-            <td><code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:.85em;">${l.tagId}</code></td>
-            <td>${l.name}</td>
-            <td>${l.x}</td>
-            <td>${l.y}</td>
-            <td>${l.z}</td>
-        </tr>`;
-    }).join('') || '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:24px">Chưa có dữ liệu</td></tr>';
-    
+    tbody.innerHTML = movementSessions.slice().reverse().map(s => `<tr>
+        <td><code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:.85em;">${s.tagId}</code></td>
+        <td>${s.name}</td>
+        <td>${fmtTime(s.startTime)}</td>
+        <td>${fmtTime(s.endTime)}</td>
+        <td style="text-align:center;">${s.points.length}</td>
+        <td style="text-align:center;white-space:nowrap;">
+            <button class="btn-row-action" onclick="exportSessionCSV('${s.id}')" style="color:#059669;border-color:#a7f3d0;">CSV</button>
+            <button class="btn-row-action" onclick="openSessionReplay('${s.id}')" style="color:#d97706;border-color:#fde68a;">Xem lại</button>
+        </td>
+    </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:24px">Chưa có phiên di chuyển</td></tr>';
     updateDashboard();
 }
 
-// Cập nhật tag filter dropdown
-function updateLogTagFilter() {
-    const sel = document.getElementById('log-tag-filter');
-    if (!sel) return;
-    const tags = [...new Set(movementLogs.map(l => l.tagId))];
-    const cur = sel.value;
-    sel.innerHTML = '<option value="all">Tất cả Tag</option>' +
-        tags.map(t => `<option value="${t}">${t}</option>`).join('');
-    sel.value = cur || 'all';
-}
-
-// Ghi log khi nhận dữ liệu tag mới
-function recordMovement(tagId, x, y, z) {
-    const name = (() => {
-        const emp = store.employees.find(e => e.tag === tagId);
-        if (emp) return emp.name;
-        const fl = store.forklifts.find(f => f.tag === tagId);
-        if (fl) return 'Xe nâng ' + fl.id;
-        return tagId;
-    })();
-    
-    movementLogs.push({
-        timestamp: new Date().toISOString(),
-        tagId, name,
-        x: parseFloat(x).toFixed(2),
-        y: parseFloat(y).toFixed(2),
-        z: parseFloat(z).toFixed(2)
-    });
-    
-    if (movementLogs.length > MAX_LOGS) movementLogs.shift();
-}
-
-// Lọc tag
-document.getElementById('log-tag-filter')?.addEventListener('change', renderLogs);
-
 // ══════════════════════════════════════════════
-// XUẤT CSV
+// XUẤT CSV THEO PHIÊN
 // ══════════════════════════════════════════════
-document.getElementById('btn-export-csv')?.addEventListener('click', () => {
-    const filter = document.getElementById('log-tag-filter').value;
-    const logs = filter === 'all' ? movementLogs : movementLogs.filter(l => l.tagId === filter);
-    
-    const header = 'Timestamp,TagID,Name,X,Y,Z\n';
-    const csv = header + logs.map(l =>
-        `${l.timestamp},${l.tagId},"${l.name}",${l.x},${l.y},${l.z}`
-    ).join('\n');
-    
+window.exportSessionCSV = function(sessionId) {
+    const s = movementSessions.find(x => x.id === sessionId);
+    if (!s) return;
+    const header = 'Index,X,Y,Z\n';
+    const csv = header + s.points.map((p, i) => `${i+1},${p.x},${p.y},${p.z}`).join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `movement_log_${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `${s.tagId}_${s.id}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-});
+};
 
 // ══════════════════════════════════════════════
-// XEM LẠI 3D (REPLAY)
+// XEM LẠI 3D — MÔ PHỎNG KHO ĐẦY ĐỦ + TAG ĐỎ
 // ══════════════════════════════════════════════
-let replayState = { scene: null, camera: null, renderer: null, animId: null, playing: false, idx: 0, logs: [] };
+let replayState = { scene:null, camera:null, renderer:null, animId:null, playing:false, idx:0, points:[], tagBall:null, trailPts:[], trailGeo:null };
 
-document.getElementById('btn-replay-3d')?.addEventListener('click', () => {
-    const panel = document.getElementById('replay-panel');
-    panel.style.display = 'block';
-    
-    const filter = document.getElementById('log-tag-filter').value;
-    replayState.logs = (filter === 'all' ? movementLogs : movementLogs.filter(l => l.tagId === filter)).slice();
-    
-    if (replayState.logs.length < 2) { alert('Cần ít nhất 2 bản ghi để phát lại!'); return; }
-    
-    const container = document.getElementById('replay-container');
-    container.innerHTML = '';
-    
-    // Tạo Three.js scene cho replay
-    const w = container.clientWidth, h = container.clientHeight;
-    const rScene = new THREE.Scene();
-    rScene.background = new THREE.Color(0x111827);
-    
-    const rCam = new THREE.PerspectiveCamera(50, w / h, 0.1, 200);
-    rCam.position.set(15, 20, 25);
-    rCam.lookAt(15, 0, 10);
-    
-    const rRenderer = new THREE.WebGLRenderer({ antialias: true });
-    rRenderer.setSize(w, h);
-    container.appendChild(rRenderer.domElement);
-    
+function buildReplayWarehouse(rScene) {
+    // Ánh sáng
+    rScene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const dl = new THREE.DirectionalLight(0xffffff, 0.8);
+    dl.position.set(10, 15, 10);
+    rScene.add(dl);
+
     // Sàn kho
-    const floor = new THREE.Mesh(
-        new THREE.PlaneGeometry(30, 20),
-        new THREE.MeshBasicMaterial({ color: 0x1e293b })
-    );
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0xd1d5db, roughness: 0.9 });
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(15, 30), floorMat);
     floor.rotation.x = -Math.PI / 2;
-    floor.position.set(15, 0, 10);
+    floor.position.set(7.5, 0, 15);
     rScene.add(floor);
-    
-    // Grid
-    const grid = new THREE.GridHelper(30, 30, 0x334155, 0x1e293b);
-    grid.position.set(15, 0.01, 10);
-    rScene.add(grid);
-    
-    // Quả cầu tag
-    const tagBall = new THREE.Mesh(
-        new THREE.SphereGeometry(0.3, 16, 16),
-        new THREE.MeshBasicMaterial({ color: 0x10b981 })
-    );
-    rScene.add(tagBall);
-    
-    // Vạch đường đi
-    const trailPoints = [];
-    const trailGeo = new THREE.BufferGeometry();
-    const trailMat = new THREE.LineBasicMaterial({ color: 0x22c55e, linewidth: 2 });
-    const trailLine = new THREE.Line(trailGeo, trailMat);
-    rScene.add(trailLine);
-    
-    replayState = { ...replayState, scene: rScene, camera: rCam, renderer: rRenderer, idx: 0, playing: false, tagBall, trailPoints, trailGeo, trailLine };
-    
-    document.getElementById('replay-slider').max = replayState.logs.length - 1;
-    document.getElementById('replay-slider').value = 0;
-    updateReplayTime();
-    renderReplayFrame(0);
-    rRenderer.render(rScene, rCam);
-});
 
-function renderReplayFrame(idx) {
-    if (!replayState.logs[idx]) return;
-    const l = replayState.logs[idx];
-    const x = parseFloat(l.x), y = parseFloat(l.z) + 0.3, z = parseFloat(l.y);
-    replayState.tagBall.position.set(x, y, z);
-    
-    // Thêm vào trail
-    replayState.trailPoints.push(new THREE.Vector3(x, y, z));
-    replayState.trailGeo.setFromPoints(replayState.trailPoints);
-    
-    replayState.renderer.render(replayState.scene, replayState.camera);
-    document.getElementById('replay-slider').value = idx;
-    updateReplayTime();
+    // Grid
+    const grid = new THREE.GridHelper(30, 30, 0x9ca3af, 0xd1d5db);
+    grid.position.set(7.5, 0.01, 15);
+    rScene.add(grid);
+
+    // Tường kho (bán trong suốt)
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0xe5e7eb, transparent: true, opacity: 0.25, side: THREE.DoubleSide });
+    const wallH = 5;
+    // Tường trước/sau
+    [0, 30].forEach(z => {
+        const w = new THREE.Mesh(new THREE.PlaneGeometry(15, wallH), wallMat);
+        w.position.set(7.5, wallH/2, z);
+        rScene.add(w);
+    });
+    // Tường trái/phải
+    [0, 15].forEach(x => {
+        const w = new THREE.Mesh(new THREE.PlaneGeometry(30, wallH), wallMat);
+        w.rotation.y = Math.PI / 2;
+        w.position.set(x, wallH/2, 15);
+        rScene.add(w);
+    });
+
+    // Kệ hàng (simplified)
+    const frameMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.6 });
+    const shelfMat = new THREE.MeshStandardMaterial({ color: 0xff6600, roughness: 0.5 });
+    const palletMat = new THREE.MeshStandardMaterial({ color: 0xb8860b, roughness: 0.95 });
+
+    function addRack(cx, cz, bays, bayLen, h, tiers) {
+        const totalZ = bays * bayLen;
+        const rW = 1.0, ft = 0.08, st = 0.05;
+        const bY = h*0.15, tY = h*0.85;
+        const ts = (tY - bY) / (tiers - 1);
+        // Cột
+        for (let j = 0; j <= bays; j++) {
+            const pz = cz - totalZ/2 + j * bayLen;
+            [-rW/2+ft/2, rW/2-ft/2].forEach(px => {
+                const p = new THREE.Mesh(new THREE.BoxGeometry(ft, h, ft), frameMat);
+                p.position.set(cx + px, h/2, pz);
+                rScene.add(p);
+            });
+        }
+        // Tầng + pallet
+        for (let j = 0; j < bays; j++) {
+            const sz = cz - totalZ/2 + j*bayLen + bayLen/2;
+            for (let i = 0; i < tiers; i++) {
+                const ty = bY + i * ts;
+                const shelf = new THREE.Mesh(new THREE.BoxGeometry(rW, st, bayLen), shelfMat);
+                shelf.position.set(cx, ty, sz);
+                rScene.add(shelf);
+                const pal = new THREE.Mesh(new THREE.BoxGeometry(rW*0.85, 0.04, bayLen*0.8), palletMat);
+                pal.position.set(cx, ty + st/2 + 0.02, sz);
+                rScene.add(pal);
+            }
+        }
+    }
+    // R1/R2
+    [3.4, 7.7, 12.0].forEach(z => { addRack(2.4, z, 4, 1.0, 2.8, 3); addRack(6.4, z, 4, 1.0, 2.8, 3); });
+    // R3/R4
+    addRack(7.5, 7.7, 12, 1.2, 3.0, 3);
+    addRack(14.5, 7.7, 12, 1.2, 3.0, 3);
 }
 
-function updateReplayTime() {
-    const el = document.getElementById('replay-time');
-    const total = replayState.logs.length;
-    const cur = replayState.idx + 1;
-    el.textContent = `${cur} / ${total}`;
+window.openSessionReplay = function(sessionId) {
+    const s = movementSessions.find(x => x.id === sessionId);
+    if (!s || s.points.length < 2) { alert('Không đủ dữ liệu để phát lại!'); return; }
+
+    const panel = document.getElementById('replay-panel');
+    panel.style.display = 'block';
+    panel.scrollIntoView({ behavior: 'smooth' });
+    document.getElementById('replay-title').textContent = `Xem lại: ${s.tagId} — ${s.name}`;
+
+    // Cleanup old
+    if (replayState.animId) clearTimeout(replayState.animId);
+    const container = document.getElementById('replay-container');
+    container.innerHTML = '';
+
+    const w = container.clientWidth, h = container.clientHeight;
+    const rScene = new THREE.Scene();
+    rScene.background = new THREE.Color(0x1e293b);
+
+    const rCam = new THREE.PerspectiveCamera(50, w / h, 0.1, 200);
+    rCam.position.set(12, 14, 28);
+    rCam.lookAt(7.5, 0, 10);
+
+    const rRenderer = new THREE.WebGLRenderer({ antialias: true });
+    rRenderer.setSize(w, h);
+    rRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container.appendChild(rRenderer.domElement);
+
+    // Xây kho hàng đầy đủ
+    buildReplayWarehouse(rScene);
+
+    // Thêm OrbitControls cho replay
+    let rControls = null;
+    if (typeof THREE.OrbitControls !== 'undefined') {
+        rControls = new THREE.OrbitControls(rCam, rRenderer.domElement);
+        rControls.target.set(7.5, 0, 10);
+        rControls.enableDamping = true;
+        rControls.update();
+    }
+
+    // Tag — quả cầu ĐỎ
+    const tagBall = new THREE.Mesh(
+        new THREE.SphereGeometry(0.25, 16, 16),
+        new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xef4444, emissiveIntensity: 0.5 })
+    );
+    rScene.add(tagBall);
+
+    // Halo sáng quanh tag
+    const halo = new THREE.Mesh(
+        new THREE.SphereGeometry(0.45, 16, 16),
+        new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.2 })
+    );
+    tagBall.add(halo);
+
+    // Trail
+    const trailPts = [];
+    const trailGeo = new THREE.BufferGeometry();
+    const trailLine = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({ color: 0xfca5a5, linewidth: 2 }));
+    rScene.add(trailLine);
+
+    replayState = { scene: rScene, camera: rCam, renderer: rRenderer, controls: rControls, animId: null, playing: false, idx: 0, points: s.points, tagBall, trailPts, trailGeo };
+
+    document.getElementById('replay-slider').max = s.points.length - 1;
+    document.getElementById('replay-slider').value = 0;
+    setReplayPos(0);
+
+    // Render loop
+    function animateReplay() {
+        replayState._rafId = requestAnimationFrame(animateReplay);
+        if (rControls) rControls.update();
+        rRenderer.render(rScene, rCam);
+    }
+    animateReplay();
+};
+
+function setReplayPos(idx) {
+    const p = replayState.points[idx];
+    if (!p) return;
+    replayState.tagBall.position.set(p.x, parseFloat(p.z) + 0.3, p.y);
+    // Trail up to idx
+    replayState.trailPts.length = 0;
+    for (let i = 0; i <= idx; i++) {
+        const pt = replayState.points[i];
+        replayState.trailPts.push(new THREE.Vector3(pt.x, parseFloat(pt.z) + 0.3, pt.y));
+    }
+    replayState.trailGeo.setFromPoints(replayState.trailPts);
+    document.getElementById('replay-slider').value = idx;
+    document.getElementById('replay-time').textContent = `${idx + 1} / ${replayState.points.length}`;
 }
 
 function playReplay() {
-    if (replayState.idx >= replayState.logs.length - 1) {
-        replayState.playing = false; return;
-    }
+    if (replayState.idx >= replayState.points.length - 1) { replayState.playing = false; return; }
     replayState.idx++;
-    renderReplayFrame(replayState.idx);
-    if (replayState.playing) {
-        replayState.animId = setTimeout(playReplay, 200);
-    }
+    setReplayPos(replayState.idx);
+    if (replayState.playing) replayState.animId = setTimeout(playReplay, 200);
 }
 
-document.getElementById('btn-replay-play')?.addEventListener('click', () => {
-    replayState.playing = true;
-    playReplay();
-});
-document.getElementById('btn-replay-pause')?.addEventListener('click', () => {
-    replayState.playing = false;
-    clearTimeout(replayState.animId);
-});
+document.getElementById('btn-replay-play')?.addEventListener('click', () => { replayState.playing = true; playReplay(); });
+document.getElementById('btn-replay-pause')?.addEventListener('click', () => { replayState.playing = false; clearTimeout(replayState.animId); });
 document.getElementById('btn-replay-close')?.addEventListener('click', () => {
     replayState.playing = false;
     clearTimeout(replayState.animId);
+    if (replayState._rafId) cancelAnimationFrame(replayState._rafId);
     document.getElementById('replay-panel').style.display = 'none';
-    const cont = document.getElementById('replay-container');
-    cont.innerHTML = '';
+    document.getElementById('replay-container').innerHTML = '';
 });
-document.getElementById('replay-slider')?.addEventListener('input', (e) => {
+document.getElementById('replay-slider')?.addEventListener('input', e => {
     replayState.idx = parseInt(e.target.value);
-    // Reset trail up to this point
-    replayState.trailPoints.length = 0;
-    for (let i = 0; i <= replayState.idx; i++) {
-        const l = replayState.logs[i];
-        replayState.trailPoints.push(new THREE.Vector3(parseFloat(l.x), parseFloat(l.z) + 0.3, parseFloat(l.y)));
-    }
-    replayState.trailGeo.setFromPoints(replayState.trailPoints);
-    renderReplayFrame(replayState.idx);
+    setReplayPos(replayState.idx);
 });
+
+// Ghi phiên mới từ tag real-time (tích lũy)
+let liveSessions = {};
+function recordMovement(tagId, x, y, z) {
+    if (!liveSessions[tagId]) {
+        const emp = store.employees.find(e => e.tag === tagId);
+        const fl = store.forklifts.find(f => f.tag === tagId);
+        const name = emp ? emp.name : fl ? 'Xe nâng ' + fl.id : tagId;
+        liveSessions[tagId] = { tagId, name, startTime: new Date().toISOString(), points: [] };
+    }
+    liveSessions[tagId].points.push({ x: +parseFloat(x).toFixed(2), y: +parseFloat(y).toFixed(2), z: +parseFloat(z).toFixed(2) });
+    liveSessions[tagId].endTime = new Date().toISOString();
+}
+
+// Flush live sessions vào bảng mỗi 60s
+setInterval(() => {
+    Object.keys(liveSessions).forEach(tagId => {
+        const ls = liveSessions[tagId];
+        if (ls.points.length >= 3) {
+            movementSessions.push({ id: 'S' + Date.now().toString().slice(-5), ...ls });
+            renderLogs();
+        }
+    });
+    liveSessions = {};
+}, 60000);
 
 // ══════════════════════════════════════════════
 // KHỞI TẠO DỮ LIỆU BAN ĐẦU
@@ -1892,22 +2037,8 @@ document.addEventListener('DOMContentLoaded', () => {
     renderEmployees();
     renderForklifts();
     renderSkus();
-    updateLogTagFilter();
     renderLogs();
     updateDashboard();
-    
-    // Ghi log mới mỗi 30s (giả lập di chuyển real-time)
-    setInterval(() => {
-        const activeTags = [
-            ...store.employees.filter(e => e.status === 'active').map(e => ({ tag: e.tag, name: e.name })),
-            ...store.forklifts.filter(f => f.status === 'active').map(f => ({ tag: f.tag, name: 'Xe nâng ' + f.id }))
-        ];
-        if (activeTags.length === 0) return;
-        const t = activeTags[Math.floor(Math.random() * activeTags.length)];
-        recordMovement(t.tag, Math.random() * 28 + 1, Math.random() * 18 + 1, Math.random() * 0.5 + 0.3);
-        updateLogTagFilter();
-        renderLogs();
-    }, 30000);
 });
 
 // ══════════════════════════════════════════════
@@ -2491,6 +2622,39 @@ const mats = [
     if (document.getElementById('tab-3d').classList.contains('active')) {
         showToast(`📦 Đã thêm ${sku.code} vào kệ ${loc}`);
     }
+}
+
+// ══ ĐỒNG BỘ TẤT CẢ SKU VÀO 3D ══
+// Gọi khi chuyển sang tab 3D hoặc khi cần refresh
+function syncSkusTo3D() {
+    // Xóa tất cả dynamic boxes hiện tại
+    let dynGroup = scene.getObjectByName('dynamicBoxGroup');
+    if (dynGroup) {
+        while (dynGroup.children.length > 0) {
+            dynGroup.remove(dynGroup.children[0]);
+        }
+    }
+    // Xóa các entry trong boxMeshMap thuộc dynamicBoxGroup
+    boxMeshMap = boxMeshMap.filter(b => {
+        if (dynGroup && dynGroup === b.mesh.parent) return false;
+        return true;
+    });
+
+    // Render lại tất cả SKU từ store
+    store.skus.forEach(sku => {
+        if (sku.location) {
+            // Đồng bộ boxesData
+            if (!boxesData[sku.code]) {
+                boxesData[sku.code] = {
+                    name: sku.name, sku: sku.code,
+                    quantity: sku.quantity,
+                    location: sku.location,
+                    note: 'Từ quản lý hàng hóa'
+                };
+            }
+            renderDynamicBox(sku);
+        }
+    });
 }
 // ══════════════════════════════════════════════
 // PICKING ROUTE TAB — A* + TSP
