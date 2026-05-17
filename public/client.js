@@ -989,7 +989,43 @@ if (window.routeTexture) {
     // Trôi liên tục dựa trên thời gian thực, đồng bộ với 2D
     window.routeTexture.offset.x = -(Date.now() % 100000) / 800; 
 }
-    // ----------------------------------------------
+
+// Cập nhật hiệu ứng nhấp nháy sáng cho hàng hóa mục tiêu picking
+if (window.isPickingMode && window.orderedVisits && window.routeStopIndices) {
+    const dm = document.getElementById('route-display-mode-3d');
+    if (dm && dm.value === 'step' && window.routeStopIndices[window.currentRouteStep] !== undefined) {
+        const nId = window.orderedVisits[window.currentRouteStep + 1]?.boxId;
+        if (nId) {
+            let tObj = boxMeshMap.find(b => b.boxId === nId);
+            if (!tObj) {
+                const sku = store.skus.find(s => s.code === nId);
+                if (sku && sku.location) {
+                    const cp = skuLocationTo3D(sku.location);
+                    if (cp) {
+                        let md = Infinity;
+                        boxMeshMap.forEach(b => {
+                            const bp = new THREE.Vector3(); b.mesh.getWorldPosition(bp);
+                            const d = bp.distanceTo(cp);
+                            if (d < md) { md = d; tObj = b; }
+                        });
+                        if (md > 2.0) tObj = null;
+                    }
+                }
+            }
+            if (tObj && tObj.mesh) {
+                const p = (Math.sin(Date.now() * 0.005) + 1) * 0.5;
+                const hc = new THREE.Color().lerpColors(new THREE.Color(0x22c55e), new THREE.Color(0xbbffbb), p);
+                const hx = hc.getHex();
+                if (Array.isArray(tObj.mesh.material)) {
+                    tObj.mesh.material.forEach(m => { if(m.emissive) { m.emissive.setHex(hx); m.emissiveIntensity = 0.8 + p * 0.4; }});
+                } else if (tObj.mesh.material.emissive) {
+                    tObj.mesh.material.emissive.setHex(hx);
+                    tObj.mesh.material.emissiveIntensity = 0.8 + p * 0.4;
+                }
+            }
+        }
+    }
+}
 
     renderer.render(scene, camera);
     axisCamera.quaternion.copy(camera.quaternion);
@@ -2611,15 +2647,42 @@ window.routeTexture = routeTex;
           // --- LÀM SÁNG HÀNG HÓA MỤC TIÊU HIỆN TẠI ---
           if (displayMode === 'step' && window.routeStopIndices[window.currentRouteStep] !== undefined) {
             const nextTargetId = window.orderedVisits[window.currentRouteStep + 1]?.boxId;
-                const targetObj = boxMeshMap.find(b => b.boxId === nextTargetId);
-                if (targetObj && targetObj.mesh) {
-                    const highlightColor = 0x44ff44; // Phát sáng màu xanh lá nhạt, nổi bật
-                    if (Array.isArray(targetObj.mesh.material)) {
-                        targetObj.mesh.material.forEach(m => { if(m.emissive) m.emissive.setHex(highlightColor); });
-                    } else if (targetObj.mesh.material.emissive) {
-                        targetObj.mesh.material.emissive.setHex(highlightColor);
+            if (nextTargetId) {
+                // Tìm box trong boxMeshMap bằng ID
+                let targetObj = boxMeshMap.find(b => b.boxId === nextTargetId);
+
+                // Fallback: tìm theo vị trí tính từ location string
+                if (!targetObj) {
+                    const sku = store.skus.find(s => s.code === nextTargetId);
+                    if (sku && sku.location) {
+                        const calcPos = skuLocationTo3D(sku.location);
+                        if (calcPos) {
+                            let minDist = Infinity;
+                            boxMeshMap.forEach(b => {
+                                const bp = new THREE.Vector3();
+                                b.mesh.getWorldPosition(bp);
+                                const d = bp.distanceTo(calcPos);
+                                if (d < minDist) { minDist = d; targetObj = b; }
+                            });
+                            if (minDist > 2.0) targetObj = null;
+                        }
                     }
                 }
+
+                if (targetObj && targetObj.mesh) {
+                    const pulse = (Math.sin(Date.now() * 0.005) + 1) * 0.5;
+                    const highlightColor = new THREE.Color().lerpColors(
+                        new THREE.Color(0x22c55e), new THREE.Color(0xbbffbb), pulse
+                    );
+                    const hexColor = highlightColor.getHex();
+                    if (Array.isArray(targetObj.mesh.material)) {
+                        targetObj.mesh.material.forEach(m => { if(m.emissive) { m.emissive.setHex(hexColor); m.emissiveIntensity = 0.8 + pulse * 0.4; } });
+                    } else if (targetObj.mesh.material.emissive) {
+                        targetObj.mesh.material.emissive.setHex(hexColor);
+                        targetObj.mesh.material.emissiveIntensity = 0.8 + pulse * 0.4;
+                    }
+                }
+            }
             }
 
             if (pointsToDraw.length < 2) return;
