@@ -57,9 +57,7 @@ body {
 }
 
 .sidebar-header span {
-    background: linear-gradient(135deg, var(--primary-light), var(--accent));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: #ffffff;
     font-size: 1.3em;
     letter-spacing: 0.5px;
 }
@@ -401,7 +399,18 @@ body {
 }
 
 .mgmt-table tr:hover td {
-    background: var(--bg-dark);
+    background: #e8ecf2;
+}
+
+.mgmt-table tbody tr:nth-child(even) td {
+    background: #f7f8fc;
+}
+.mgmt-table tbody tr:nth-child(odd) td {
+    background: #ffffff;
+}
+.mgmt-table tbody tr:nth-child(even):hover td,
+.mgmt-table tbody tr:nth-child(odd):hover td {
+    background: #e8ecf2;
 }
 
 

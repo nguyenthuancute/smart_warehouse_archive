@@ -1807,12 +1807,11 @@ function renderLogs() {
         <td>${s.name}</td>
         <td>${fmtTime(s.startTime)}</td>
         <td>${fmtTime(s.endTime)}</td>
-        <td style="text-align:center;">${s.points.length}</td>
         <td style="text-align:center;white-space:nowrap;">
             <button class="btn-row-action" onclick="exportSessionCSV('${s.id}')" style="color:#059669;border-color:#a7f3d0;">CSV</button>
             <button class="btn-row-action" onclick="openSessionReplay('${s.id}')" style="color:#d97706;border-color:#fde68a;">Xem lại</button>
         </td>
-    </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:24px">Chưa có phiên di chuyển</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:24px">Chưa có phiên di chuyển</td></tr>';
     updateDashboard();
 }
 
@@ -2436,10 +2435,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Lưu yêu cầu lấy hàng
         const emp = store.employees.find(e => e.tag === tagId);
+        const fl = store.forklifts.find(f => f.tag === tagId);
+        const assigneeName = emp ? emp.name : (fl ? ('Xe nâng ' + fl.id) : tagId);
         pickingRequests.push({
             id: 'PK-' + String(pickingRequests.length + 1).padStart(3, '0'),
             tagId: tagId,
-            assignee: emp ? emp.name : tagId,
+            assignee: assigneeName,
             items: [...window.selectedPickingItems],
             status: 'pending',
             createdAt: new Date().toLocaleString('vi-VN')
