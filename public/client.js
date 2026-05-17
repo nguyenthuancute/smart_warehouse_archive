@@ -2225,45 +2225,74 @@ if (typeof io !== 'undefined') {
     });
 }
 // --- TÍNH NĂNG PICKING TÍCH HỢP TAB HÀNG HÓA ---
+// Lưu danh sách yêu cầu lấy hàng
+const pickingRequests = [];
+
+// Tính tọa độ 3D từ location string (VD: R1205)
+function skuLocationTo3D(location) {
+    const match = location.match(/^R([1-4])([1-3])(\d{2})$/);
+    if (!match) return null;
+    const ri = parseInt(match[1]), ti = parseInt(match[2]), bay = parseInt(match[3]);
+    let X, Y, Z;
+    if (ri === 1 || ri === 2) {
+        X = ri === 1 ? 2.4 : 6.4;
+        const blockIndex = Math.floor((bay-1) / 4);
+        const localJ = (bay-1) % 4;
+        Z = 1.9 + blockIndex * 4.3 + localJ * 1.0;
+        Y = (2.8 * 0.15) + (ti - 1) * 0.98 + 0.35;
+    } else {
+        X = ri === 3 ? 7.5 : 14.5;
+        Z = 1.1 + (bay-1) * 1.2;
+        Y = (3.0 * 0.15) + (ti - 1) * 1.05 + 0.37;
+    }
+    return new THREE.Vector3(X, Y, Z);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Chèn giao diện Modal Confirm vào hệ thống
+    // 1. Chèn Modal Confirm picking
     document.body.insertAdjacentHTML('beforeend', `
         <div id="modal-picking" class="modal-overlay">
             <div class="modal-box" style="max-width: 480px;">
-                <button class="modal-close" onclick="closeModal('modal-picking')">✕</button>
-                <h3>🛒 Xác nhận danh sách Picking</h3>
+                <h3>Xác nhận danh sách Picking</h3>
                 <div class="form-group">
                     <label>Mã Tag (Xe kéo/Nhân viên)</label>
                     <input type="text" id="picking-tag-id" placeholder="VD: TAG-001" value="TAG-001">
-                    <small style="color:#6c757d;">(Hệ thống sẽ tạo một Tag giả ở khu vực cửa kho để test tính năng)</small>
+                    <small style="color:#6c757d;">(Hệ thống sẽ tạo một Tag giả ở khu vực cửa kho để test)</small>
                 </div>
                 <div class="form-group" style="margin-top: 10px;">
-    <label>Chế độ hiển thị lộ trình</label>
-    <select id="route-display-mode" style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #dee2e6;">
-        <option value="full">Hiển thị toàn bộ lộ trình</option>
-        <option value="step">Hiển thị từng chặng (đến từng hàng hóa)</option>
-    </select>
-</div>
+                    <label>Chế độ hiển thị lộ trình</label>
+                    <select id="route-display-mode" style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #dee2e6;">
+                        <option value="full">Hiển thị toàn bộ lộ trình</option>
+                        <option value="step">Hiển thị từng chặng</option>
+                    </select>
+                </div>
                 <div class="form-group">
                     <label>Danh sách hàng hóa cần lấy</label>
-                    <ul id="picking-confirm-list" style="list-style:none; padding:0; max-height: 220px; overflow-y:auto; border:1px solid #dee2e6; border-radius:5px; padding:10px; margin:0; background: #f8f9fa;">
-                    </ul>
+                    <ul id="picking-confirm-list" style="list-style:none; padding:10px; max-height:220px; overflow-y:auto; border:1px solid #dee2e6; border-radius:5px; margin:0; background:#f8f9fa;"></ul>
                 </div>
                 <div class="modal-actions">
-                    <button class="btn-secondary-outline" onclick="closeModal('modal-picking')">Hủy</button>
-                    <button class="btn-primary" id="btn-confirm-picking" style="background: #10b981;">Tạo lộ trình 3D</button>
+                    <button class="btn-secondary-outline" id="btn-cancel-picking">Hủy</button>
+                    <button class="btn-primary" id="btn-confirm-picking" style="background:#10b981;">Tạo lộ trình 3D</button>
                 </div>
             </div>
         </div>
     `);
 
-    // 2. Chèn nút "Lên lộ trình Picking" vào kế bên nút Thêm SKU
+    // Nút Hủy đóng modal
+    document.getElementById('btn-cancel-picking').addEventListener('click', () => {
+        document.getElementById('modal-picking').classList.remove('open');
+    });
+    // Click overlay đóng
+    document.getElementById('modal-picking').addEventListener('click', (e) => {
+        if (e.target.id === 'modal-picking') e.target.classList.remove('open');
+    });
+
+    // 2. Chèn nút "Lên lộ trình Picking" + vùng hiển thị yêu cầu
     setTimeout(() => {
         const btnAddSku = document.getElementById('btn-add-sku');
         if (btnAddSku) {
             btnAddSku.insertAdjacentHTML('beforebegin', `<button class="btn-primary" id="btn-start-picking" style="background-color: #10b981; margin-right: 10px;"> Lên lộ trình Picking</button>`);
-            
-            // Xử lý sự kiện khi bấm nút Picking ở bảng
+
             document.getElementById('btn-start-picking').addEventListener('click', () => {
                 const checkboxes = document.querySelectorAll('.cb-picking:checked');
                 window.selectedPickingItems = [];
@@ -2281,17 +2310,94 @@ document.addEventListener('DOMContentLoaded', () => {
                         </li>
                     `;
                 });
-                openModal('modal-picking');
+                document.getElementById('modal-picking').classList.add('open');
             });
+        }
+
+        // Chèn vùng danh sách yêu cầu lấy hàng bên dưới bảng SKU
+        const skuTab = document.getElementById('tab-sku');
+        if (skuTab) {
+            skuTab.insertAdjacentHTML('beforeend', `
+                <div id="picking-requests-section" style="margin-top:24px; display:none;">
+                    <div class="mgmt-header">
+                        <div>
+                            <h2>Yêu cầu lấy hàng</h2>
+                            <p>Danh sách các lộ trình picking đã tạo.</p>
+                        </div>
+                    </div>
+                    <div class="table-wrapper" style="max-height:40vh;">
+                        <table class="mgmt-table">
+                            <thead>
+                                <tr>
+                                    <th>Mã YC</th>
+                                    <th>Tag / Người thực hiện</th>
+                                    <th>Số lượng hàng</th>
+                                    <th>Danh sách SKU</th>
+                                    <th>Trạng thái</th>
+                                    <th style="text-align:center;">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="picking-requests-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            `);
         }
     }, 500);
 
-    // Hàm cho phép xóa hàng hóa ngay trong popup confirm
+    // Hàm xóa item khỏi popup confirm
     window.removePickingItem = function(code) {
-        document.getElementById('pick-item-' + code).remove();
-        window.selectedPickingItems = window.selectedPickingItems.filter(i => i !== code);
+        const el = document.getElementById('pick-item-' + code);
+        if (el) el.remove();
+        window.selectedPickingItems = (window.selectedPickingItems || []).filter(i => i !== code);
         const cb = document.querySelector(`.cb-picking[value="${code}"]`);
-        if(cb) cb.checked = false; // Xóa tick ở bảng ngoài
+        if (cb) cb.checked = false;
+    };
+
+    // Render danh sách yêu cầu
+    window.renderPickingRequests = function() {
+        const section = document.getElementById('picking-requests-section');
+        const tbody = document.getElementById('picking-requests-tbody');
+        if (!section || !tbody) return;
+        if (pickingRequests.length === 0) { section.style.display = 'none'; return; }
+        section.style.display = 'block';
+        tbody.innerHTML = pickingRequests.map((r, idx) => `<tr>
+            <td><code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;">${r.id}</code></td>
+            <td>${r.tagId} — ${r.assignee}</td>
+            <td style="text-align:center;">${r.items.length}</td>
+            <td style="font-size:.85em;">${r.items.join(', ')}</td>
+            <td><span class="status-badge ${r.status === 'done' ? 'status-done' : 'status-pending'}">${r.status === 'done' ? 'Hoàn thành' : 'Đang thực hiện'}</span></td>
+            <td style="text-align:center;white-space:nowrap;">
+                <button class="btn-row-action" onclick="editPickingRequest(${idx})" style="color:#d97706;border-color:#fde68a;">Sửa</button>
+                <button class="btn-row-action" onclick="togglePickingStatus(${idx})" style="color:#059669;border-color:#a7f3d0;">${r.status === 'done' ? 'Mở lại' : 'Xong'}</button>
+                <button class="btn-row-action btn-row-delete" onclick="deletePickingRequest(${idx})">Xóa</button>
+            </td>
+        </tr>`).join('');
+    };
+
+    window.editPickingRequest = function(idx) {
+        const r = pickingRequests[idx];
+        if (!r) return;
+        const newTag = prompt('Mã Tag / Người thực hiện:', r.tagId);
+        if (newTag === null) return;
+        const newAssignee = prompt('Tên người thực hiện:', r.assignee);
+        if (newAssignee === null) return;
+        r.tagId = newTag || r.tagId;
+        r.assignee = newAssignee || r.assignee;
+        renderPickingRequests();
+    };
+
+    window.togglePickingStatus = function(idx) {
+        const r = pickingRequests[idx];
+        if (!r) return;
+        r.status = r.status === 'done' ? 'pending' : 'done';
+        renderPickingRequests();
+    };
+
+    window.deletePickingRequest = function(idx) {
+        if (!confirm('Xóa yêu cầu này?')) return;
+        pickingRequests.splice(idx, 1);
+        renderPickingRequests();
     };
 
     // 3. Xử lý thuật toán và Vẽ đường khi bấm Confirm
@@ -2303,31 +2409,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- TẠO TỌA ĐỘ GIẢ CHO TAG ĐỂ TEST ---
         if (!tagDataStore[tagId]) {
-            // Đặt xe kéo giả ở tọa độ X=2.0 (gần tường trái), Y=28.0 (gần cửa cuốn)
             tagDataStore[tagId] = { x: 2.0, y: 28.0, z: 0.5 }; 
-            updateTags3D(tagDataStore); // Render cục tròn đỏ (Tag) lên không gian 3D
+            updateTags3D(tagDataStore);
         }
 
         const tagPos = tagDataStore[tagId];
-        // Điểm xuất phát bắt đầu từ tọa độ của Tag
         const startPoint = new THREE.Vector3(tagPos.x, tagPos.z || 0.5, tagPos.y); 
 
         let pointsToVisit = [startPoint];
 
-        // Rút tọa độ 3D của các hàng hóa đã tick
+        // Rút tọa độ 3D từ location string (không phụ thuộc boxMeshMap)
         window.selectedPickingItems.forEach(targetCode => {
-            const mappedObj = boxMeshMap.find(b => b.boxId === targetCode);
-            if (mappedObj && mappedObj.mesh) {
-                const pos = new THREE.Vector3();
-                mappedObj.mesh.getWorldPosition(pos);
-                pos.boxId = targetCode; // Gắn thêm ID để hiển thị thông báo từng chặng
+            // Tìm SKU trong store
+            const sku = store.skus.find(s => s.code === targetCode);
+            if (!sku || !sku.location) return;
+            const pos = skuLocationTo3D(sku.location);
+            if (pos) {
+                pos.boxId = targetCode;
                 pointsToVisit.push(pos);
             }
         });
 
         if (pointsToVisit.length <= 1) {
-            return alert("Không thể tính lộ trình! Vui lòng đảm bảo các hàng hóa đã chọn có Vị trí (VD: R1205) để hệ thống nhận diện trong 3D.");
+            return alert("Không thể tính lộ trình! Không tìm thấy vị trí hợp lệ cho các hàng hóa đã chọn.");
         }
+
+        // Lưu yêu cầu lấy hàng
+        const emp = store.employees.find(e => e.tag === tagId);
+        pickingRequests.push({
+            id: 'PK-' + String(pickingRequests.length + 1).padStart(3, '0'),
+            tagId: tagId,
+            assignee: emp ? emp.name : tagId,
+            items: [...window.selectedPickingItems],
+            status: 'pending',
+            createdAt: new Date().toLocaleString('vi-VN')
+        });
+        renderPickingRequests();
+
+        // Đóng modal
+        document.getElementById('modal-picking').classList.remove('open');
 
         window.isPickingMode = true;
 

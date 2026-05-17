@@ -31,6 +31,13 @@
       "password": "$2a$10$HxkNsQ9IiIiKwJXw16MEZuc38NEVZUAg6YVTVKRb7KPg9ESg09qOi",
       "role": "admin",
       "createdAt": "2026-05-17T09:09:25.745Z"
+    },
+    {
+      "id": "U-1779011866143",
+      "username": "admin3",
+      "password": "$2a$10$hMv.HuKmkGbzw/9rT35V8uO/0V9VU0uMBYIhMrDRP3G4F9GQ9ue2K",
+      "role": "admin",
+      "createdAt": "2026-05-17T09:57:46.146Z"
     }
   ],
   "boxes": []
