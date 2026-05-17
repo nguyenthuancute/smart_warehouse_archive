@@ -1467,26 +1467,45 @@ const store = {
 // --- Lịch sử di chuyển (PHIÊN) ---
 const movementSessions = [];
 
-// Tạo đường đi giả lập qua các kệ trong kho
+// Tạo đường đi giả lập — CHỈ đi trong lối đi (aisle), KHÔNG xuyên kệ
+// Layout kho: 15m (X) × 30m (Z)
+// R1 tại X=2.4, R2 tại X=6.4 → lối đi giữa X≈4.4
+// R3 tại X=7.5, R4 tại X=14.5 → lối đi giữa X≈11
+// Lối đi chính dọc: X=1 (trái), X=4.4 (giữa R1-R2), X=11 (giữa R3-R4)
+// Lối đi ngang: Z=1 (cổng), Z=2 (trước kệ), Z=15 (giữa kho), Z=28 (cuối kho)
 function generatePath(steps) {
     const pts = [];
-    // Các điểm chính trong kho (x, z theo layout 15x30m)
-    const waypoints = [
-        {x:1,y:1},{x:1,y:14},{x:5,y:14},{x:5,y:5},{x:2.4,y:5},{x:2.4,y:9},
-        {x:6.4,y:9},{x:6.4,y:3},{x:7.5,y:3},{x:7.5,y:14},{x:10,y:14},
-        {x:14.5,y:14},{x:14.5,y:5},{x:10,y:5},{x:10,y:1},{x:1,y:1}
+    // Lối đi an toàn — chỉ dùng tọa độ nằm trong aisle
+    const aisleRoutes = [
+        // Route 1: Đi dọc lối trái → ngang giữa → dọc giữa R1-R2
+        [{x:1,y:1},{x:1,y:2},{x:1,y:8},{x:1,y:15},{x:1,y:22},{x:1,y:28},
+         {x:4.4,y:28},{x:4.4,y:22},{x:4.4,y:15},{x:4.4,y:8},{x:4.4,y:2},{x:1,y:2}],
+        // Route 2: Đi dọc giữa R3-R4
+        [{x:4.4,y:2},{x:4.4,y:15},{x:11,y:15},{x:11,y:8},{x:11,y:3},
+         {x:11,y:8},{x:11,y:15},{x:4.4,y:15},{x:4.4,y:2}],
+        // Route 3: Vòng quanh kho (xe nâng)
+        [{x:1,y:1},{x:1,y:15},{x:1,y:28},{x:4.4,y:28},{x:4.4,y:15},
+         {x:6,y:15},{x:6,y:2},{x:11,y:2},{x:11,y:15},{x:11,y:28},
+         {x:6,y:28},{x:4.4,y:28},{x:1,y:28},{x:1,y:15},{x:1,y:1}],
+        // Route 4: Khu vực R3-R4 dọc
+        [{x:6,y:2},{x:6,y:5},{x:6,y:10},{x:6,y:15},{x:11,y:15},
+         {x:11,y:10},{x:11,y:5},{x:11,y:2},{x:6,y:2}],
+        // Route 5: Lối đi phải R4
+        [{x:11,y:2},{x:11,y:8},{x:11,y:15},{x:11,y:22},{x:11,y:28},
+         {x:4.4,y:28},{x:4.4,y:22},{x:4.4,y:15},{x:1,y:15},{x:1,y:8},{x:1,y:2}]
     ];
-    let wi = Math.floor(Math.random() * waypoints.length);
+    const route = aisleRoutes[Math.floor(Math.random() * aisleRoutes.length)];
+    const startIdx = Math.floor(Math.random() * route.length);
     for (let i = 0; i < steps; i++) {
-        const wp = waypoints[wi % waypoints.length];
-        const next = waypoints[(wi + 1) % waypoints.length];
-        const t = (i % 4) / 4;
+        const idx = (startIdx + Math.floor(i / 3)) % route.length;
+        const nextIdx = (idx + 1) % route.length;
+        const wp = route[idx], next = route[nextIdx];
+        const t = (i % 3) / 3;
         pts.push({
-            x: +(wp.x + (next.x - wp.x) * t + (Math.random()-0.5)*0.3).toFixed(2),
-            y: +(wp.y + (next.y - wp.y) * t + (Math.random()-0.5)*0.3).toFixed(2),
-            z: +(0.3 + Math.random()*0.2).toFixed(2)
+            x: +(wp.x + (next.x - wp.x) * t + (Math.random()-0.5)*0.15).toFixed(2),
+            y: +(wp.y + (next.y - wp.y) * t + (Math.random()-0.5)*0.15).toFixed(2),
+            z: +(0.3 + Math.random()*0.15).toFixed(2)
         });
-        if (i % 4 === 3) wi++;
     }
     return pts;
 }
@@ -2755,10 +2774,9 @@ function getPickGridPos(boxId) {
     if (match) {
         const rack = match[1], bay = parseInt(match[2]);
         const baseZ = 7.7 + (bay-1)*1.2 + 0.6;
-        const baseX = rack==='RA' ? 7.5 : 14.5;
-        const col = Math.round(baseX/PK.CELL);
         const row = Math.round(baseZ/PK.CELL);
-        const pickCol = rack==='RA' ? col-3 : col+3;
+        // Điểm lấy hàng = lối đi song song (không đi vào kệ)
+        const pickCol = rack==='RA' ? Math.round(6.0/PK.CELL) : Math.round(11.0/PK.CELL);
         return { col: Math.max(1,Math.min(PK.COLS-2,pickCol)), row: Math.max(1,Math.min(PK.ROWS-2,row)), label: boxId };
     }
     // SKU với location dạng R3xx
@@ -2770,9 +2788,13 @@ function getPickGridPos(boxId) {
         else if (ri===2) { baseX=6.4; baseZ=1.9+Math.floor((bay-1)/4)*4.3+(bay-1)%4*1.0; }
         else if (ri===3) { baseX=7.5; baseZ=1.1+(bay-1)*1.2; }
         else { baseX=14.5; baseZ=1.1+(bay-1)*1.2; }
-        const col = Math.round(baseX/PK.CELL);
         const row = Math.round(baseZ/PK.CELL);
-        const pickCol = (ri===1||ri===2) ? col+2 : (ri===3 ? col-2 : col+2);
+        // Điểm lấy hàng = lối đi song song cạnh kệ (không đi vào kệ)
+        let pickCol;
+        if (ri === 1) pickCol = Math.round(1.0 / PK.CELL);   // Lối trái R1 (X≈1)
+        else if (ri === 2) pickCol = Math.round(4.4 / PK.CELL); // Lối giữa R1-R2 (X≈4.4)
+        else if (ri === 3) pickCol = Math.round(6.0 / PK.CELL); // Lối trái R3 (X≈6)
+        else pickCol = Math.round(11.0 / PK.CELL);             // Lối giữa R3-R4 (X≈11)
         return { col: Math.max(1,Math.min(PK.COLS-2,pickCol)), row: Math.max(1,Math.min(PK.ROWS-2,row)), label: boxId };
     }
     return null;

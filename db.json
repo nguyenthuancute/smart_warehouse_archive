@@ -17,6 +17,20 @@
       "password": "$2a$10$58MTOvtDmOPU0lAlRxd6hui1lqwhP5B.ItOgPLh5HjM4hmFHmrsXm",
       "role": "admin",
       "createdAt": "2026-05-17T06:06:37.447Z"
+    },
+    {
+      "id": "U-1779007098322",
+      "username": "admin_test_99",
+      "password": "$2a$10$mG1/mnqqMNjtWdwq/r.cvOjv1OyFzErfVDMCHLJCiUwm6mhbzydSe",
+      "role": "admin",
+      "createdAt": "2026-05-17T08:38:18.323Z"
+    },
+    {
+      "id": "U-1779008965737",
+      "username": "testadmin",
+      "password": "$2a$10$HxkNsQ9IiIiKwJXw16MEZuc38NEVZUAg6YVTVKRb7KPg9ESg09qOi",
+      "role": "admin",
+      "createdAt": "2026-05-17T09:09:25.745Z"
     }
   ],
   "boxes": []
