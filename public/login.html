@@ -6,36 +6,15 @@
     <title>Đăng nhập – Smart Warehouse</title>
     <link rel="stylesheet" href="auth.css">
     <style>
-        .role-tabs { display: flex; margin-bottom: 24px; border-radius: 8px; overflow: hidden; border: 1px solid #dee2e6; }
-        .role-tab  { flex: 1; padding: 11px; text-align: center; cursor: pointer; font-weight: 600; font-size: .9em; background: #f8f9fa; color: #6c757d; transition: all .2s; border: none; }
-        .role-tab.active { background: #111827; color: #fff; }
-        .role-badge { display: inline-block; margin-bottom: 6px; font-size: 1.6em; }
         .auth-container { max-width: 400px; }
         .error-msg { color: #dc2626; font-size: .85em; margin-top: 8px; display: none; }
-        .register-link { font-size: .85em; text-align: center; margin-top: 14px; color: #6c757d; }
-        .register-link a { color: #111827; font-weight: 600; }
-        .divider { text-align:center; color:#aaa; font-size:.8em; margin: 16px 0; }
     </style>
 </head>
 <body>
     <div class="auth-container">
-        <div style="text-align:center; margin-bottom:20px;">
-            <div style="font-size:2em;"></div>
+        <div style="text-align:center; margin-bottom:24px;">
             <h2 style="margin:4px 0 2px; font-size:1.3em;">INSITE</h2>
             <p style="color:#6c757d; font-size:.85em; margin:0;">Hệ thống quản lý kho thông minh</p>
-        </div>
-
-        <div class="role-tabs">
-            <button class="role-tab active" data-role="admin" onclick="selectRole('admin')">
-                Quản lý kho
-            </button>
-            <button class="role-tab" data-role="customer" onclick="selectRole('customer')">
-                Khách hàng
-            </button>
-        </div>
-
-        <div id="role-desc" style="background:#f0f2f5; border-radius:8px; padding:10px 14px; margin-bottom:18px; font-size:.82em; color:#374151;">
-            <b>Quản lý kho:</b> Toàn quyền quản lý nhân viên, hàng hóa, nhập xuất kho.
         </div>
 
         <div class="input-group">
@@ -49,31 +28,14 @@
 
         <p class="error-msg" id="error-msg">Sai tên đăng nhập hoặc mật khẩu!</p>
 
-        <button onclick="doLogin()" style="width:100%; margin-top:8px; padding:12px; background:#111827; color:#fff; border:none; border-radius:8px; font-size:1em; font-weight:600; cursor:pointer;">
+        <button onclick="doLogin()" style="width:100%; margin-top:8px; padding:12px; background:#111827; color:#fff; border:none; border-radius:8px; font-size:1em; font-weight:600; cursor:pointer; transition: all .22s cubic-bezier(.4,0,.2,1);"
+            onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(17,24,39,.3)'"
+            onmouseout="this.style.transform='';this.style.boxShadow=''">
             Đăng nhập
         </button>
-
-        <div class="divider">— hoặc —</div>
-        <div class="register-link">
-            Chưa có tài khoản? <a href="/register.html">Đăng ký ngay</a>
-        </div>
     </div>
 
     <script>
-        let selectedRole = 'admin';
-
-        function selectRole(role) {
-            selectedRole = role;
-            document.querySelectorAll('.role-tab').forEach(t => t.classList.remove('active'));
-            document.querySelector(`[data-role="${role}"]`).classList.add('active');
-            const desc = document.getElementById('role-desc');
-            if (role === 'admin') {
-                desc.innerHTML = '<b>Quản lý kho:</b> Toàn quyền quản lý nhân viên, hàng hóa, nhập xuất kho.';
-            } else {
-                desc.innerHTML = '<b>Khách hàng:</b> Tra cứu hàng hóa, theo dõi đơn hàng của bạn.';
-            }
-        }
-
         document.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 
         async function doLogin() {
