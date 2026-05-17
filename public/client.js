@@ -138,10 +138,11 @@ canvas2d.addEventListener('touchend', (e) => {
         isMapDragging = false;
     }
 });
-// Đặt kích thước cho canvas
+// Đặt kích thước cho canvas - responsive cho mobile
 if (canvas2d) {
-    canvas2d.width = window.innerWidth - 260 || 800; 
-    canvas2d.height = window.innerHeight - 56 || 600;
+    const isMobile = window.innerWidth <= 768;
+    canvas2d.width = isMobile ? window.innerWidth : (window.innerWidth - 260 || 800); 
+    canvas2d.height = isMobile ? window.innerHeight : (window.innerHeight - 56 || 600);
 }
  
 let roomMesh = null;
@@ -749,6 +750,14 @@ socket.on('tags_update', (data) => {
     tagDataStore = data;
     updateTags3D(data);
     updateTable(data);
+
+    // Ghi vào lịch sử di chuyển (real-time)
+    if (typeof recordMovement === 'function') {
+        Object.keys(data).forEach(id => {
+            const pos = data[id];
+            recordMovement(id, pos.x, pos.y, pos.z);
+        });
+    }
  
     if (isRecording) {
         const now = new Date();
@@ -953,12 +962,15 @@ if (window.routeTexture) {
 animate();
  
 window.addEventListener('resize', () => {
+    const isMobile = window.innerWidth <= 768;
+
     // 1. Cập nhật kích thước Không gian 3D
-    const { clientWidth, clientHeight } = container;
-    if (clientWidth > 0 && clientHeight > 0) {
-        camera.aspect = clientWidth / clientHeight;
+    const w3d = container.clientWidth || window.innerWidth;
+    const h3d = container.clientHeight || window.innerHeight;
+    if (w3d > 0 && h3d > 0) {
+        camera.aspect = w3d / h3d;
         camera.updateProjectionMatrix();
-        renderer.setSize(clientWidth, clientHeight);
+        renderer.setSize(w3d, h3d);
     }
  
     // 2. Cập nhật kích thước trục tọa độ
@@ -968,12 +980,11 @@ window.addEventListener('resize', () => {
         axisRenderer.setSize(axisContainer.clientWidth, axisContainer.clientHeight);
     }
 
-    // 3. FIX LỖI 2D: Cập nhật lại kích thước Canvas 2D để không bị sai tỉ lệ (móp méo)
+    // 3. Cập nhật lại kích thước Canvas 2D
     const mapCont = document.getElementById('map-2d-container');
     if (canvas2d && mapCont && mapCont.style.display !== 'none') {
-        // Gán lại kích thước thực tế của vùng chứa cho độ phân giải của canvas
-        canvas2d.width = mapCont.clientWidth;
-        canvas2d.height = mapCont.clientHeight;
+        canvas2d.width = mapCont.clientWidth || window.innerWidth;
+        canvas2d.height = mapCont.clientHeight || window.innerHeight;
     }
 });
  
@@ -1358,12 +1369,55 @@ coll.addEventListener('click', () => {
  
 // --- Dữ liệu lưu trong bộ nhớ ---
 const store = {
-    employees: [],
-    forklifts: [],
-    skus: [],
+    employees: [
+        { id: 'NV-001', name: 'Nguyễn Văn An', role: 'Kỹ thuật viên', status: 'active', tag: 'TAG-A01' },
+        { id: 'NV-002', name: 'Trần Thị Bình', role: 'Quản lý kho', status: 'active', tag: 'TAG-A02' },
+        { id: 'NV-003', name: 'Lê Hoàng Cường', role: 'Vận hành xe nâng', status: 'active', tag: 'TAG-A03' },
+        { id: 'NV-004', name: 'Phạm Minh Đức', role: 'Nhân viên kiểm kê', status: 'inactive', tag: 'TAG-A04' },
+        { id: 'NV-005', name: 'Hoàng Thị Em', role: 'Kỹ thuật viên', status: 'active', tag: 'TAG-A05' },
+    ],
+    forklifts: [
+        { id: 'FL-001', type: 'Điện 2.5T', status: 'active', location: 'Khu A', tag: 'TAG-F01' },
+        { id: 'FL-002', type: 'Diesel 3T', status: 'active', location: 'Khu B', tag: 'TAG-F02' },
+        { id: 'FL-003', type: 'Điện 1.5T', status: 'inactive', location: 'Bảo trì', tag: 'TAG-F03' },
+    ],
+    skus: [
+        { code: 'SKU-001', name: 'Linh kiện điện tử A', unit: 'Thùng', quantity: 120, price: 250000, location: 'R1101' },
+        { code: 'SKU-002', name: 'Vật tư đóng gói B', unit: 'Kg', quantity: 85, price: 45000, location: 'R1205' },
+        { code: 'SKU-003', name: 'Motor servo C', unit: 'Cái', quantity: 30, price: 1200000, location: 'R2108' },
+        { code: 'SKU-004', name: 'Dầu bôi trơn D', unit: 'Thùng', quantity: 0, price: 180000, location: 'R3201' },
+        { code: 'SKU-005', name: 'Cảm biến nhiệt E', unit: 'Cái', quantity: 8, price: 350000, location: 'R4112' },
+    ],
     receipts: [],
     deliveries: []
 };
+
+// --- Lịch sử di chuyển ---
+const movementLogs = [];
+const MAX_LOGS = 500;
+
+// Tạo dữ liệu log giả lập ban đầu
+(function generateMockLogs() {
+    const tags = [
+        { tag: 'TAG-A01', name: 'Nguyễn Văn An' },
+        { tag: 'TAG-A02', name: 'Trần Thị Bình' },
+        { tag: 'TAG-A03', name: 'Lê Hoàng Cường' },
+        { tag: 'TAG-F01', name: 'Xe nâng FL-001' },
+        { tag: 'TAG-F02', name: 'Xe nâng FL-002' },
+    ];
+    const now = Date.now();
+    for (let i = 0; i < 50; i++) {
+        const t = tags[Math.floor(Math.random() * tags.length)];
+        movementLogs.push({
+            timestamp: new Date(now - (50 - i) * 60000).toISOString(),
+            tagId: t.tag,
+            name: t.name,
+            x: (Math.random() * 28 + 1).toFixed(2),
+            y: (Math.random() * 18 + 1).toFixed(2),
+            z: (Math.random() * 0.5 + 0.3).toFixed(2)
+        });
+    }
+})();
  
 // --- Tiện ích tạo ID ---
 function genId(prefix) {
@@ -1521,9 +1575,15 @@ document.getElementById('btn-save-sku').addEventListener('click', () => {
  
     const sku = { code, name, unit: unit || '—', quantity, price, location };
     
+    // Kiểm tra trùng SKU
+    if (store.skus.some(s => s.code === code)) {
+        alert('Mã SKU đã tồn tại!'); return;
+    }
+    store.skus.push(sku);
+
     // Lưu vào boxesData để hệ thống picking nhận biết
     boxesData[code] = { 
-        name, sku: code, quantity: stock,
+        name, sku: code, quantity: quantity,
         location, note: 'Thêm từ tab Quản lý hàng hóa'
     };
 
@@ -1534,7 +1594,7 @@ document.getElementById('btn-save-sku').addEventListener('click', () => {
     closeModal('modal-sku');
  
     // Reset form
-    ['sku-code','sku-name','sku-unit','sku-stock','sku-min-stock','sku-price','sku-location'].forEach(id => {
+    ['sku-code','sku-name','sku-unit','sku-qty','sku-price','sku-location'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
@@ -1584,83 +1644,6 @@ function renderSkus() {
 document.getElementById('sku-search').addEventListener('input', renderSkus);
 document.getElementById('sku-filter').addEventListener('change', renderSkus);
  
-// ══ PHIẾU NHẬP ══
-document.getElementById('btn-create-receipt').addEventListener('click', () => {
-    setTodayDate('rec-date');
-    document.getElementById('rec-code').value = 'PN-' + new Date().getFullYear() + '-' + String(store.receipts.length + 1).padStart(3,'0');
-    openModal('modal-receipt');
-});
- 
-document.getElementById('btn-save-receipt').addEventListener('click', () => {
-    const code     = document.getElementById('rec-code').value.trim();
-    const date     = document.getElementById('rec-date').value;
-    const supplier = document.getElementById('rec-supplier').value.trim();
-    const status   = document.getElementById('rec-status').value;
-    const value    = parseInt(document.getElementById('rec-value').value) || 0;
-if (!code || !supplier) { alert('Vui lòng nhập Mã phiếu và Nhà cung cấp!'); return; }
- 
-    store.receipts.push({ code, date, supplier, status, value });
-    renderReceipts();
-    closeModal('modal-receipt');
- 
-    ['rec-code','rec-date','rec-supplier','rec-value'].forEach(id => document.getElementById(id).value = '');
-    document.getElementById('rec-status').value = 'pending';
-});
- 
-function renderReceipts() {
-    const tbody = document.getElementById('receipt-tbody');
-    const fmt = n => n.toLocaleString('vi-VN');
-    tbody.innerHTML = store.receipts.map(r => `
-        <tr>
-            <td>${r.code}</td>
-            <td>${r.date}</td>
-            <td>${r.supplier}</td>
-            <td><span class="status-badge ${r.status === 'done' ? 'status-done' : 'status-pending'}">${r.status === 'done' ? 'Hoàn thành' : 'Chờ xử lý'}</span></td>
-            <td>${fmt(r.value)} ₫</td>
-            <td>
-                <button class="btn-row-action btn-row-delete" onclick="deleteItem('receipts','${r.code}', renderReceipts, 'code')">Xóa</button>
-            </td>
-        </tr>
-    `).join('') || '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:24px">Chưa có phiếu nhập nào</td></tr>';
-}
- 
-// ══ PHIẾU XUẤT ══
-document.getElementById('btn-create-delivery').addEventListener('click', () => {
-    setTodayDate('del-date');
-    document.getElementById('del-code').value = 'PX-' + new Date().getFullYear() + '-' + String(store.deliveries.length + 1).padStart(3,'0');
-    openModal('modal-delivery');
-});
- 
-document.getElementById('btn-save-delivery').addEventListener('click', () => {
-    const code     = document.getElementById('del-code').value.trim();
-    const date     = document.getElementById('del-date').value;
-    const customer = document.getElementById('del-customer').value.trim();
-    const status   = document.getElementById('del-status').value;
- 
-    if (!code || !customer) { alert('Vui lòng nhập Mã phiếu và Khách hàng!'); return; }
- 
-    store.deliveries.push({ code, date, customer, status });
-    renderDeliveries();
-    closeModal('modal-delivery');
- 
-    ['del-code','del-date','del-customer'].forEach(id => document.getElementById(id).value = '');
-    document.getElementById('del-status').value = 'pending';
-});
- 
-function renderDeliveries() {
-    const tbody = document.getElementById('delivery-tbody');
-    tbody.innerHTML = store.deliveries.map(d => `
-        <tr>
-            <td>${d.code}</td>
-            <td>${d.date}</td>
-            <td>${d.customer}</td>
-            <td><span class="status-badge ${d.status === 'done' ? 'status-done' : 'status-pending'}">${d.status === 'done' ? 'Hoàn thành' : 'Chờ xử lý'}</span></td>
-            <td>
-                <button class="btn-row-action btn-row-delete" onclick="deleteItem('deliveries','${d.code}', renderDeliveries, 'code')">Xóa</button>
-            </td>
-        </tr>
-`).join('') || '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:24px">Chưa có phiếu xuất nào</td></tr>';
-}
  
 // ══ XÓA ITEM ══
 window.deleteItem = function(storeKey, id, renderFn, idField = 'id') {
@@ -1673,8 +1656,259 @@ window.deleteItem = function(storeKey, id, renderFn, idField = 'id') {
 window.renderEmployees = renderEmployees;
 window.renderForklifts = renderForklifts;
 window.renderSkus = renderSkus;
+// Stubs cho receipt/delivery (đã xóa)
+function renderReceipts() {}
+function renderDeliveries() {}
 window.renderReceipts = renderReceipts;
 window.renderDeliveries = renderDeliveries;
+
+// ══════════════════════════════════════════════
+// DASHBOARD ĐỒNG BỘ
+// ══════════════════════════════════════════════
+function updateDashboard() {
+    const el = (id) => document.getElementById(id);
+    el('dash-emp-active').textContent = store.employees.filter(e => e.status === 'active').length;
+    el('dash-emp-total').textContent = store.employees.length;
+    el('dash-fork-active').textContent = store.forklifts.filter(f => f.status === 'active').length;
+    el('dash-fork-total').textContent = store.forklifts.length;
+    el('dash-sku-total').textContent = store.skus.length;
+    el('dash-sku-qty').textContent = store.skus.reduce((s, k) => s + k.quantity, 0).toLocaleString('vi-VN');
+    el('dash-log-total').textContent = movementLogs.length;
+}
+
+// ══════════════════════════════════════════════
+// LỊCH SỬ DI CHUYỂN - RENDER LOG TABLE
+// ══════════════════════════════════════════════
+function renderLogs() {
+    const tbody = document.getElementById('log-tbody');
+    if (!tbody) return;
+    const filter = document.getElementById('log-tag-filter').value;
+    const logs = filter === 'all' ? movementLogs : movementLogs.filter(l => l.tagId === filter);
+    
+    // Hiển thị mới nhất lên đầu
+    tbody.innerHTML = logs.slice().reverse().map(l => {
+        const t = new Date(l.timestamp);
+        const time = t.toLocaleTimeString('vi-VN') + ' ' + t.toLocaleDateString('vi-VN');
+        return `<tr>
+            <td>${time}</td>
+            <td><code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:.85em;">${l.tagId}</code></td>
+            <td>${l.name}</td>
+            <td>${l.x}</td>
+            <td>${l.y}</td>
+            <td>${l.z}</td>
+        </tr>`;
+    }).join('') || '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:24px">Chưa có dữ liệu</td></tr>';
+    
+    updateDashboard();
+}
+
+// Cập nhật tag filter dropdown
+function updateLogTagFilter() {
+    const sel = document.getElementById('log-tag-filter');
+    if (!sel) return;
+    const tags = [...new Set(movementLogs.map(l => l.tagId))];
+    const cur = sel.value;
+    sel.innerHTML = '<option value="all">Tất cả Tag</option>' +
+        tags.map(t => `<option value="${t}">${t}</option>`).join('');
+    sel.value = cur || 'all';
+}
+
+// Ghi log khi nhận dữ liệu tag mới
+function recordMovement(tagId, x, y, z) {
+    const name = (() => {
+        const emp = store.employees.find(e => e.tag === tagId);
+        if (emp) return emp.name;
+        const fl = store.forklifts.find(f => f.tag === tagId);
+        if (fl) return 'Xe nâng ' + fl.id;
+        return tagId;
+    })();
+    
+    movementLogs.push({
+        timestamp: new Date().toISOString(),
+        tagId, name,
+        x: parseFloat(x).toFixed(2),
+        y: parseFloat(y).toFixed(2),
+        z: parseFloat(z).toFixed(2)
+    });
+    
+    if (movementLogs.length > MAX_LOGS) movementLogs.shift();
+}
+
+// Lọc tag
+document.getElementById('log-tag-filter')?.addEventListener('change', renderLogs);
+
+// ══════════════════════════════════════════════
+// XUẤT CSV
+// ══════════════════════════════════════════════
+document.getElementById('btn-export-csv')?.addEventListener('click', () => {
+    const filter = document.getElementById('log-tag-filter').value;
+    const logs = filter === 'all' ? movementLogs : movementLogs.filter(l => l.tagId === filter);
+    
+    const header = 'Timestamp,TagID,Name,X,Y,Z\n';
+    const csv = header + logs.map(l =>
+        `${l.timestamp},${l.tagId},"${l.name}",${l.x},${l.y},${l.z}`
+    ).join('\n');
+    
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `movement_log_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+});
+
+// ══════════════════════════════════════════════
+// XEM LẠI 3D (REPLAY)
+// ══════════════════════════════════════════════
+let replayState = { scene: null, camera: null, renderer: null, animId: null, playing: false, idx: 0, logs: [] };
+
+document.getElementById('btn-replay-3d')?.addEventListener('click', () => {
+    const panel = document.getElementById('replay-panel');
+    panel.style.display = 'block';
+    
+    const filter = document.getElementById('log-tag-filter').value;
+    replayState.logs = (filter === 'all' ? movementLogs : movementLogs.filter(l => l.tagId === filter)).slice();
+    
+    if (replayState.logs.length < 2) { alert('Cần ít nhất 2 bản ghi để phát lại!'); return; }
+    
+    const container = document.getElementById('replay-container');
+    container.innerHTML = '';
+    
+    // Tạo Three.js scene cho replay
+    const w = container.clientWidth, h = container.clientHeight;
+    const rScene = new THREE.Scene();
+    rScene.background = new THREE.Color(0x111827);
+    
+    const rCam = new THREE.PerspectiveCamera(50, w / h, 0.1, 200);
+    rCam.position.set(15, 20, 25);
+    rCam.lookAt(15, 0, 10);
+    
+    const rRenderer = new THREE.WebGLRenderer({ antialias: true });
+    rRenderer.setSize(w, h);
+    container.appendChild(rRenderer.domElement);
+    
+    // Sàn kho
+    const floor = new THREE.Mesh(
+        new THREE.PlaneGeometry(30, 20),
+        new THREE.MeshBasicMaterial({ color: 0x1e293b })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(15, 0, 10);
+    rScene.add(floor);
+    
+    // Grid
+    const grid = new THREE.GridHelper(30, 30, 0x334155, 0x1e293b);
+    grid.position.set(15, 0.01, 10);
+    rScene.add(grid);
+    
+    // Quả cầu tag
+    const tagBall = new THREE.Mesh(
+        new THREE.SphereGeometry(0.3, 16, 16),
+        new THREE.MeshBasicMaterial({ color: 0x10b981 })
+    );
+    rScene.add(tagBall);
+    
+    // Vạch đường đi
+    const trailPoints = [];
+    const trailGeo = new THREE.BufferGeometry();
+    const trailMat = new THREE.LineBasicMaterial({ color: 0x22c55e, linewidth: 2 });
+    const trailLine = new THREE.Line(trailGeo, trailMat);
+    rScene.add(trailLine);
+    
+    replayState = { ...replayState, scene: rScene, camera: rCam, renderer: rRenderer, idx: 0, playing: false, tagBall, trailPoints, trailGeo, trailLine };
+    
+    document.getElementById('replay-slider').max = replayState.logs.length - 1;
+    document.getElementById('replay-slider').value = 0;
+    updateReplayTime();
+    renderReplayFrame(0);
+    rRenderer.render(rScene, rCam);
+});
+
+function renderReplayFrame(idx) {
+    if (!replayState.logs[idx]) return;
+    const l = replayState.logs[idx];
+    const x = parseFloat(l.x), y = parseFloat(l.z) + 0.3, z = parseFloat(l.y);
+    replayState.tagBall.position.set(x, y, z);
+    
+    // Thêm vào trail
+    replayState.trailPoints.push(new THREE.Vector3(x, y, z));
+    replayState.trailGeo.setFromPoints(replayState.trailPoints);
+    
+    replayState.renderer.render(replayState.scene, replayState.camera);
+    document.getElementById('replay-slider').value = idx;
+    updateReplayTime();
+}
+
+function updateReplayTime() {
+    const el = document.getElementById('replay-time');
+    const total = replayState.logs.length;
+    const cur = replayState.idx + 1;
+    el.textContent = `${cur} / ${total}`;
+}
+
+function playReplay() {
+    if (replayState.idx >= replayState.logs.length - 1) {
+        replayState.playing = false; return;
+    }
+    replayState.idx++;
+    renderReplayFrame(replayState.idx);
+    if (replayState.playing) {
+        replayState.animId = setTimeout(playReplay, 200);
+    }
+}
+
+document.getElementById('btn-replay-play')?.addEventListener('click', () => {
+    replayState.playing = true;
+    playReplay();
+});
+document.getElementById('btn-replay-pause')?.addEventListener('click', () => {
+    replayState.playing = false;
+    clearTimeout(replayState.animId);
+});
+document.getElementById('btn-replay-close')?.addEventListener('click', () => {
+    replayState.playing = false;
+    clearTimeout(replayState.animId);
+    document.getElementById('replay-panel').style.display = 'none';
+    const cont = document.getElementById('replay-container');
+    cont.innerHTML = '';
+});
+document.getElementById('replay-slider')?.addEventListener('input', (e) => {
+    replayState.idx = parseInt(e.target.value);
+    // Reset trail up to this point
+    replayState.trailPoints.length = 0;
+    for (let i = 0; i <= replayState.idx; i++) {
+        const l = replayState.logs[i];
+        replayState.trailPoints.push(new THREE.Vector3(parseFloat(l.x), parseFloat(l.z) + 0.3, parseFloat(l.y)));
+    }
+    replayState.trailGeo.setFromPoints(replayState.trailPoints);
+    renderReplayFrame(replayState.idx);
+});
+
+// ══════════════════════════════════════════════
+// KHỞI TẠO DỮ LIỆU BAN ĐẦU
+// ══════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+    renderEmployees();
+    renderForklifts();
+    renderSkus();
+    updateLogTagFilter();
+    renderLogs();
+    updateDashboard();
+    
+    // Ghi log mới mỗi 30s (giả lập di chuyển real-time)
+    setInterval(() => {
+        const activeTags = [
+            ...store.employees.filter(e => e.status === 'active').map(e => ({ tag: e.tag, name: e.name })),
+            ...store.forklifts.filter(f => f.status === 'active').map(f => ({ tag: f.tag, name: 'Xe nâng ' + f.id }))
+        ];
+        if (activeTags.length === 0) return;
+        const t = activeTags[Math.floor(Math.random() * activeTags.length)];
+        recordMovement(t.tag, Math.random() * 28 + 1, Math.random() * 18 + 1, Math.random() * 0.5 + 0.3);
+        updateLogTagFilter();
+        renderLogs();
+    }, 30000);
+});
 
 // ══════════════════════════════════════════════
 // THÙNG HÀNG - POPUP & CRUD
@@ -2054,8 +2288,8 @@ const dashCanvas = document.createElement('canvas');
 dashCanvas.width = 128; dashCanvas.height = 64;
 const dCtx = dashCanvas.getContext('2d');
 
-// Vẽ nét đứt: một nửa tô màu xanh ngọc, một nửa để trong suốt
-dCtx.fillStyle = '#10b981';
+// Vẽ nét đứt: màu xanh lá cây sáng cho dễ nhìn
+dCtx.fillStyle = '#22c55e';
 dCtx.fillRect(0, 0, 64, 64); 
 
 const routeTex = new THREE.CanvasTexture(dashCanvas);
@@ -2747,21 +2981,40 @@ document.addEventListener('DOMContentLoaded', () => {
 document.addEventListener('DOMContentLoaded', () => {
     const menuBtn = document.getElementById('mobile-menu-btn');
     const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+
+    function openSidebar() {
+        if (sidebar) sidebar.classList.add('open');
+        if (overlay) overlay.classList.add('active');
+    }
+
+    function closeSidebar() {
+        if (sidebar) sidebar.classList.remove('open');
+        if (overlay) overlay.classList.remove('active');
+    }
 
     if (menuBtn && sidebar) {
-        // Bấm nút để đóng/mở thanh menu
         menuBtn.addEventListener('click', () => {
-            sidebar.classList.toggle('open');
+            if (sidebar.classList.contains('open')) {
+                closeSidebar();
+            } else {
+                openSidebar();
+            }
         });
 
-        // Tự động đóng menu khi chọn một mục bất kỳ trên Mobile
+        // Đóng menu khi chọn mục bất kỳ trên Mobile
         document.querySelectorAll('.sidebar-menu a').forEach(link => {
             link.addEventListener('click', () => {
                 if (window.innerWidth <= 768) {
-                    sidebar.classList.remove('open');
+                    closeSidebar();
                 }
             });
         });
+    }
+
+    // Bấm vào overlay (nền mờ) để đóng sidebar
+    if (overlay) {
+        overlay.addEventListener('click', closeSidebar);
     }
 });
 
@@ -2773,13 +3026,11 @@ if (btnZoomIn && btnZoomOut) {
     btnZoomIn.addEventListener('click', () => {
         const is2D = document.getElementById('btn-mode-2d').classList.contains('active');
         if (is2D) {
-            // Zoom in 2D
             if (typeof mapZoom !== 'undefined' && typeof render2D === 'function') {
                 mapZoom *= 1.3;
                 render2D();
             }
         } else {
-            // Zoom in 3D (Kéo Camera tiến gần lại mục tiêu 30%)
             if (typeof camera !== 'undefined' && typeof controls !== 'undefined') {
                 const dist = camera.position.distanceTo(controls.target);
                 const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
@@ -2792,13 +3043,11 @@ if (btnZoomIn && btnZoomOut) {
     btnZoomOut.addEventListener('click', () => {
         const is2D = document.getElementById('btn-mode-2d').classList.contains('active');
         if (is2D) {
-            // Zoom out 2D
             if (typeof mapZoom !== 'undefined' && typeof render2D === 'function') {
                 mapZoom /= 1.3;
                 render2D();
             }
         } else {
-            // Zoom out 3D (Đẩy Camera lùi ra xa 30%)
             if (typeof camera !== 'undefined' && typeof controls !== 'undefined') {
                 const dist = camera.position.distanceTo(controls.target);
                 const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
@@ -2828,10 +3077,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Cập nhật lại khung nhìn 3D sau khi header thay đổi kích thước
             setTimeout(() => {
-                if (typeof onWindowResize === 'function') {
-                    onWindowResize();
-                }
-            }, 300);
+                window.dispatchEvent(new Event('resize'));
+            }, 350);
         });
     }
 });
+

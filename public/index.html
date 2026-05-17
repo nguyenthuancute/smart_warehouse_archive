@@ -26,7 +26,7 @@
 
             // Ẩn menu quản lý nếu là khách hàng
             if (user.role === 'customer') {
-                ['tab-employee','tab-forklift','tab-receipt','tab-delivery','tab-log'].forEach(tabId => {
+                ['tab-employee','tab-forklift','tab-log'].forEach(tabId => {
                     const link = document.querySelector(`[data-tab="${tabId}"]`);
                     if (link) link.parentElement.style.display = 'none';
                 });
@@ -39,14 +39,14 @@
         window.location.href = '/login.html';
     }
 </script>
-    <head>
-<head>
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart Warehouse</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div id="sidebar-overlay"></div>
 <button id="mobile-menu-btn">☰</button>
     <div id="zoom-controls">
         <button id="btn-zoom-in">+</button>
@@ -60,12 +60,10 @@
 <ul class="sidebar-menu">
                 <li><a href="#" class="nav-link active" data-tab="tab-dashboard">Dashboard</a></li>
                 <li><a href="#" class="nav-link" data-tab="tab-3d">3D Kho</a></li>
-                <li><a href="#" class="nav-link" data-tab="tab-employee">Quản lý nhân viên</a></li>
-                <li><a href="#" class="nav-link" data-tab="tab-forklift">Quản lý xe nâng</a></li>
+                <li><a href="#" class="nav-link" data-tab="tab-employee">Nhân viên</a></li>
+                <li><a href="#" class="nav-link" data-tab="tab-forklift">Xe nâng</a></li>
                 <li><a href="#" class="nav-link" data-tab="tab-sku">Hàng hóa</a></li>
-                <li><a href="#" class="nav-link" data-tab="tab-receipt">Nhập</a></li>
-                <li><a href="#" class="nav-link" data-tab="tab-delivery">Xuất</a></li>
-                <li><a href="#" class="nav-link" data-tab="tab-log">Quản lý lịch sử di chuyển</a></li>                
+                <li><a href="#" class="nav-link" data-tab="tab-log">Lịch sử di chuyển</a></li>
             </ul>
         </div>
 
@@ -77,21 +75,22 @@
                 <div class="dashboard-cards">
                     <div class="card">
                         <h3>Nhân viên</h3>
-                        <p>Đang active: 0</p>
-                        <p>Tổng số: 0</p>
-                        <p>Active hôm nay: 0</p>
+                        <p>Đang active: <strong id="dash-emp-active">0</strong></p>
+                        <p>Tổng số: <strong id="dash-emp-total">0</strong></p>
                     </div>
                     <div class="card">
-                        <h3>Số xe nâng</h3>
-                        <p>0</p>
+                        <h3>Xe nâng</h3>
+                        <p>Hoạt động: <strong id="dash-fork-active">0</strong></p>
+                        <p>Tổng số: <strong id="dash-fork-total">0</strong></p>
                     </div>
                     <div class="card">
-                        <h3>Số hàng trong kho</h3>
-                        <p>0</p>
+                        <h3>Hàng hóa trong kho</h3>
+                        <p>Tổng SKU: <strong id="dash-sku-total">0</strong></p>
+                        <p>Tổng SL: <strong id="dash-sku-qty">0</strong></p>
                     </div>
                     <div class="card">
-                        <h3>Số chỗ trống còn lại</h3>
-                        <p>0</p>
+                        <h3>Lịch sử di chuyển</h3>
+                        <p>Tổng bản ghi: <strong id="dash-log-total">0</strong></p>
                     </div>
                 </div>
             </div>
@@ -299,56 +298,7 @@
                     </table>
                 </div>
             </div>
-            
-            <div id="tab-receipt" class="tab-content mgmt-tab">
-                 <div class="mgmt-header">
-                    <div>
-                        <h2>Phiếu nhập kho</h2>
-                        <p>Tạo và quản lý các phiếu nhập kho.</p>
-</div>
-                    <button class="btn-primary" id="btn-create-receipt">Tạo phiếu nhập</button>
-                </div>
-                 <div class="table-wrapper">
-                    <table class="mgmt-table">
-                        <thead>
-                            <tr>
-                                <th>Mã phiếu</th>
-                                <th>Ngày tạo</th>
-                                <th>Nhà cung cấp</th>
-                                <th>Trạng thái</th>
-                                <th>Tổng giá trị</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody id="receipt-tbody">
-                            </tbody>
-                    </table>
-                </div>
-            </div>
 
-            <div id="tab-delivery" class="tab-content mgmt-tab">
-                <div class="mgmt-header">
-                    <div>
-                        <h2>Phiếu xuất kho</h2>
-                        <p>Tạo và quản lý các phiếu xuất kho.</p>
-                    </div>
-                    <button class="btn-primary" id="btn-create-delivery">Tạo phiếu xuất</button>
-                </div>
-                 <div class="table-wrapper">
-                    <table class="mgmt-table">
-                        <thead>
-                            <tr>
-                                <th>Mã phiếu</th>
-                                <th>Ngày tạo</th>
-                                <th>Khách hàng</th>
-                                <th>Trạng thái</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody id="delivery-tbody"></tbody>
-                    </table>
-                </div>
-            </div>
             
             <div id="tab-log" class="tab-content mgmt-tab">
                 <div class="mgmt-header">
@@ -356,22 +306,45 @@
                         <h2>Lịch sử di chuyển</h2>
                         <p>Theo dõi lịch sử di chuyển của các tags (nhân viên, xe nâng).</p>
                     </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <select id="log-tag-filter" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border-color);font-size:.85em;">
+                            <option value="all">Tất cả Tag</option>
+                        </select>
+                        <button class="btn-primary" id="btn-export-csv" style="background:linear-gradient(135deg,#059669,#10b981);">Xuất CSV</button>
+                        <button class="btn-primary" id="btn-replay-3d" style="background:linear-gradient(135deg,#d97706,#f59e0b);">Xem lại 3D</button>
+                    </div>
                 </div>
-                <div class="table-wrapper">
+                <div class="table-wrapper" style="max-height:55vh;">
                     <table class="mgmt-table">
                         <thead>
                             <tr>
                                 <th>Thời gian</th>
                                 <th>Tag ID</th>
                                 <th>Đối tượng</th>
-                                <th>Vị trí X</th>
-                                <th>Vị trí Y</th>
-                                <th>Vị trí Z</th>
+                                <th>X</th>
+                                <th>Y</th>
+                                <th>Z</th>
                             </tr>
                         </thead>
                         <tbody id="log-tbody"></tbody>
                     </table>
-</div>
+                </div>
+                <!-- 3D Replay panel -->
+                <div id="replay-panel" style="display:none;margin-top:16px;background:var(--bg-med);border-radius:var(--radius);border:1px solid var(--border-color);overflow:hidden;box-shadow:var(--shadow-md);">
+                    <div style="padding:12px 16px;background:linear-gradient(135deg,#f8fafc,#f1f5f9);border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;">
+                        <strong style="font-size:.9em;">Xem lại chuyển động 3D</strong>
+                        <div style="display:flex;gap:6px;">
+                            <button id="btn-replay-play" class="btn-primary" style="padding:6px 14px;font-size:.8em;">Phát</button>
+                            <button id="btn-replay-pause" class="btn-primary" style="padding:6px 14px;font-size:.8em;background:#64748b;">Dừng</button>
+                            <button id="btn-replay-close" style="padding:6px 14px;font-size:.8em;border:1px solid var(--border-color);border-radius:6px;background:#fff;cursor:pointer;">Đóng</button>
+                        </div>
+                    </div>
+                    <div id="replay-container" style="width:100%;height:400px;position:relative;background:#111827;"></div>
+                    <div style="padding:8px 16px;background:#f8fafc;display:flex;align-items:center;gap:10px;">
+                        <input type="range" id="replay-slider" min="0" max="100" value="0" style="flex:1;">
+                        <span id="replay-time" style="font-size:.8em;color:var(--secondary);min-width:80px;">00:00 / 00:00</span>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -477,14 +450,17 @@
                     <label>Số lượng</label>
                     <input type="number" id="sku-qty" placeholder="0" min="0">
                 </div>
-                </div>
-                <div class="form-row">
+            </div>
+            <div class="form-group">
+                <label>Đơn giá (VNĐ)</label>
+                <input type="number" id="sku-price" placeholder="0" min="0">
+            </div>
             <div class="form-group">
                 <label>Vị trí kho <span style="color:#6b7280;font-size:.78em;">(chọn kệ → hàng hóa xuất hiện trong 3D)</span></label>
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+                <div class="loc-grid">
                     <div>
-                        <label style="font-size:.75em;color:#6b7280;font-weight:500;">Dãy kệ</label>
-                        <select id="sku-loc-rack" style="width:100%;padding:7px 8px;border:1px solid #dee2e6;border-radius:5px;font-size:.85em;">
+                        <label class="loc-label">Dãy kệ</label>
+                        <select id="sku-loc-rack" class="loc-select">
                             <option value="">-- Chọn --</option>
                             <option value="1">R1 – Kệ trái A</option>
                             <option value="2">R2 – Kệ trái B</option>
@@ -493,21 +469,32 @@
                         </select>
                     </div>
                     <div>
-                        <label style="font-size:.75em;color:#6b7280;font-weight:500;">Tầng (1-3)</label>
-                        <select id="sku-loc-tier" style="width:100%;padding:7px 8px;border:1px solid #dee2e6;border-radius:5px;font-size:.85em;">
+                        <label class="loc-label">Tầng (1-3)</label>
+                        <select id="sku-loc-tier" class="loc-select">
                             <option value="1">Tầng 1 (dưới)</option>
                             <option value="2">Tầng 2 (giữa)</option>
                             <option value="3">Tầng 3 (trên)</option>
                         </select>
                     </div>
                     <div>
-                        <label style="font-size:.75em;color:#6b7280;font-weight:500;">Ô bay (01-12)</label>
-                        <select id="sku-loc-bay" style="width:100%;padding:7px 8px;border:1px solid #dee2e6;border-radius:5px;font-size:.85em;">
-                            ${Array.from({length:12},(_,i)=>`<option value="${String(i+1).padStart(2,'0')}">Bay ${String(i+1).padStart(2,'0')}</option>`).join('')}
+                        <label class="loc-label">Ô bay (01-12)</label>
+                        <select id="sku-loc-bay" class="loc-select">
+                            <option value="01">Bay 01</option>
+                            <option value="02">Bay 02</option>
+                            <option value="03">Bay 03</option>
+                            <option value="04">Bay 04</option>
+                            <option value="05">Bay 05</option>
+                            <option value="06">Bay 06</option>
+                            <option value="07">Bay 07</option>
+                            <option value="08">Bay 08</option>
+                            <option value="09">Bay 09</option>
+                            <option value="10">Bay 10</option>
+                            <option value="11">Bay 11</option>
+                            <option value="12">Bay 12</option>
                         </select>
                     </div>
                 </div>
-                <div style="margin-top:6px;padding:6px 10px;background:#f0fdf4;border-radius:5px;font-size:.78em;color:#065f46;">
+                <div class="loc-preview">
                     📍 Mã vị trí: <b id="sku-loc-preview">Chưa chọn</b>
                 </div>
                 <input type="hidden" id="sku-location">
@@ -519,75 +506,7 @@
         </div>
     </div>
 
-    <div id="modal-receipt" class="modal-overlay">
-        <div class="modal-box">
-            <button class="modal-close" data-modal="modal-receipt">&times;</button>
-            <h3>Tạo phiếu nhập kho</h3>
-            <div class="form-row">
-                <div class="form-group">
-<label>Mã phiếu *</label>
-                    <input type="text" id="rec-code" placeholder="PN-2026-001">
-                </div>
-                <div class="form-group">
-                    <label>Ngày tạo</label>
-                    <input type="date" id="rec-date">
-                </div>
-            </div>
-            <div class="form-group">
-                <label>Nhà cung cấp *</label>
-                <input type="text" id="rec-supplier" placeholder="Tên nhà cung cấp">
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Trạng thái</label>
-                    <select id="rec-status">
-                        <option value="pending">Chờ xử lý</option>
-                        <option value="done">Hoàn thành</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Tổng giá trị (VNĐ)</label>
-                    <input type="number" id="rec-value" placeholder="0" min="0">
-                </div>
-            </div>
-            <div class="modal-actions">
-                <button class="btn-secondary-outline" data-modal="modal-receipt">Hủy</button>
-                <button class="btn-primary" id="btn-save-receipt">Tạo phiếu</button>
-            </div>
-        </div>
-    </div>
 
-    <div id="modal-delivery" class="modal-overlay">
-        <div class="modal-box">
-            <button class="modal-close" data-modal="modal-delivery">&times;</button>
-            <h3>Tạo phiếu xuất kho</h3>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Mã phiếu *</label>
-                    <input type="text" id="del-code" placeholder="PX-2026-001">
-                </div>
-                <div class="form-group">
-                    <label>Ngày tạo</label>
-                    <input type="date" id="del-date">
-                </div>
-            </div>
-            <div class="form-group">
-                <label>Khách hàng *</label>
-                <input type="text" id="del-customer" placeholder="Tên khách hàng / công ty">
-            </div>
-            <div class="form-group">
-                <label>Trạng thái</label>
-                <select id="del-status">
-                    <option value="pending">Chờ xử lý</option>
-                    <option value="done">Hoàn thành</option>
-                </select>
-            </div>
-            <div class="modal-actions">
-                <button class="btn-secondary-outline" data-modal="modal-delivery">Hủy</button>
-                <button class="btn-primary" id="btn-save-delivery">Tạo phiếu</button>
-            </div>
-        </div>
-    </div>
 
     <!-- ══ TAB: PICKING ROUTE ══ -->
     <div id="tab-picking" class="tab-content" style="display:none; padding:20px;">
