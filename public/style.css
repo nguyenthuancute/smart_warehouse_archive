@@ -1,7 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
-    --bg-dark: #f0f3f8;
+    --bg-dark: #fff3e0;
     --bg-med: #ffffff;
     --bg-light: #f7f8fc;
     --primary: #4f46e5;
@@ -405,9 +405,11 @@ body {
 .mgmt-table tbody tr:nth-child(even) td {
     background: #f7f8fc;
 }
+
 .mgmt-table tbody tr:nth-child(odd) td {
     background: #ffffff;
 }
+
 .mgmt-table tbody tr:nth-child(even):hover td,
 .mgmt-table tbody tr:nth-child(odd):hover td {
     background: #e8ecf2;
@@ -462,7 +464,7 @@ body {
     cursor: pointer;
     font-weight: 600;
     font-size: .85em;
-    transition: all .22s cubic-bezier(.4,0,.2,1);
+    transition: all .22s cubic-bezier(.4, 0, .2, 1);
     box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
 }
 
@@ -535,7 +537,7 @@ body {
     cursor: pointer;
     color: #6c757d;
     line-height: 1;
-    transition: all .2s cubic-bezier(.4,0,.2,1);
+    transition: all .2s cubic-bezier(.4, 0, .2, 1);
     border-radius: 50%;
     width: 32px;
     height: 32px;
@@ -603,13 +605,13 @@ body {
     cursor: pointer;
     font-size: .85em;
     font-weight: 600;
-    transition: all .22s cubic-bezier(.4,0,.2,1);
+    transition: all .22s cubic-bezier(.4, 0, .2, 1);
 }
 
 .btn-secondary-outline:hover {
     background: #f0f2f5;
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,.08);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, .08);
     border-color: #cbd5e1;
 }
 
@@ -656,13 +658,13 @@ body {
     cursor: pointer;
     margin-right: 4px;
     font-weight: 600;
-    transition: all .2s cubic-bezier(.4,0,.2,1);
+    transition: all .2s cubic-bezier(.4, 0, .2, 1);
 }
 
 .btn-row-action:hover {
     background: #f0f2f5;
     transform: translateY(-2px) scale(1.05);
-    box-shadow: 0 4px 12px rgba(0,0,0,.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, .1);
 }
 
 .btn-row-action:active {
@@ -678,7 +680,7 @@ body {
 .btn-row-delete:hover {
     background: #fee2e2;
     border-color: #f87171;
-    box-shadow: 0 4px 12px rgba(220,38,38,.15);
+    box-shadow: 0 4px 12px rgba(220, 38, 38, .15);
 }
 
 #employee-search,
@@ -743,19 +745,19 @@ body {
     font-size: 1em;
     font-weight: 600;
     cursor: pointer;
-    transition: all .22s cubic-bezier(.4,0,.2,1);
+    transition: all .22s cubic-bezier(.4, 0, .2, 1);
 }
 
 .splash-btn:hover {
     background: #111827;
     color: #fff;
     transform: translateY(-3px) scale(1.03);
-    box-shadow: 0 8px 24px rgba(17,24,39,.25);
+    box-shadow: 0 8px 24px rgba(17, 24, 39, .25);
 }
 
 .splash-btn:active {
     transform: translateY(0) scale(0.98);
-    box-shadow: 0 2px 8px rgba(17,24,39,.15);
+    box-shadow: 0 2px 8px rgba(17, 24, 39, .15);
 }
 
 /* Styling cho Picking Panel */
